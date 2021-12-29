@@ -1,0 +1,42 @@
+{{define "method" }}
+{{- if (len .Req.Members)}}
+// {{.Req.TypeName}} holds the arguments for the {{.Camelcase}} call.
+{{- range .Arguments}}
+{{- if (HasPrefix . "//") }}
+//
+{{.}}
+{{- else}}
+//  {{.}}
+{{- end}}
+{{- end}}
+{{.Req.Definition}}
+{{end}}
+{{- if (len .Resp.Members)}}
+// {{.Resp.TypeName}} holds the response to the {{.Camelcase}} call.
+{{- range .Results}}
+{{- if (HasPrefix . "//") }}
+//
+{{.}}
+{{- else}}
+//  {{.}}
+{{- end}}
+{{- end}}
+{{.Resp.Definition}}
+{{end}}
+// {{.Camelcase}} RPC method.
+{{- range (Split .Comment "\n")}}
+// {{.}}
+{{- end}}
+func (bc *BitcoindClient) {{.Camelcase}}(ctx context.Context{{if (len .Req.Members)}}, args {{.Req.TypeName}}{{end}}) ({{if (len .Resp.Members)}}result {{.Resp.TypeName}}, {{end}}err error) {
+{{- if (len .Resp.Members)}}
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}}, false); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
+{{- else}}
+	_, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}}, false)
+{{- end}}
+	return
+}
+{{end}}

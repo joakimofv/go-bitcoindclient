@@ -1,0 +1,10 @@
+#!/bin/bash -ex
+
+cd codegen
+go install
+cd -
+codegen
+cd todofix
+go install
+cd -
+todofix todofix.yaml

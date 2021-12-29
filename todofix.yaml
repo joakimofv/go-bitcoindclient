@@ -1,0 +1,112 @@
+- file: blockchain.go
+  todo: |-
+    (\t*)// TODO: Same output as verbosity = 1
+  fix: |-
+    %[1]s// Same output as verbosity = 1
+    %[1]sGetBlockRespForVerbosityEquals1
+- file: blockchain.go
+  todo: |-
+    (\t*)// TODO: The transactions in the format of the getrawtransaction RPC. Different from verbosity = 1 "tx" result
+  fix: |-
+    %[1]s// The transactions in the format of the getrawtransaction RPC. Different from verbosity = 1 "tx" result
+    %[1]sGetRawTransactionRespIfVerboseIsSetToTrue
+- file: rawtransactions.go
+  todo: |-
+    (\t*)Tx struct {
+    \t*// TODO: The layout is the same as the output of decoderawtransaction.
+    \t*}
+  fix: |-
+    %[1]s// The layout is the same as the output of decoderawtransaction.
+    %[1]sTx DecodeRawTransactionResp
+- file: rawtransactions.go
+  todo: |
+
+    type DecodePsbtRespInputsNonWitnessUtxo struct {
+    	// TODO: FIX DecodePsbtRespInputsNonWitnessUtxo
+    }
+
+- file: rawtransactions.go
+  todo: DecodePsbtRespInputsNonWitnessUtxo
+  fix: DecodePsbtRespInputsWitnessUtxo
+- file: wallet.go
+  todo: |
+
+    type GetAddressInfoRespEmbedded struct \{
+    	// TODO: Includes all getaddressinfo output fields for the embedded address, excluding metadata \(timestamp, hdkeypath, hdseedid\)
+    	// and relation to the wallet \(ismine, iswatchonly\).
+    \}
+
+- file: wallet.go
+  todo: |-
+    (\t*)([^\t]*)GetAddressInfoRespEmbedded
+  fix: |-
+    %[1]s// Includes all getaddressinfo output fields for the embedded address, excluding metadata (timestamp, hdkeypath, hdseedid)
+    %[1]s// and relation to the wallet (ismine, iswatchonly).
+    %[1]s%[2]sGetAddressInfoResp
+- file: wallet.go
+  todo: |-
+    (\t*)Decoded struct {
+    \t*// TODO: Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
+    \t*}
+  fix: |-
+    %[1]s// Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
+    %[1]sDecoded DecodeRawTransactionResp
+- file: wallet.go
+  todo: |
+
+    type ImportDescriptorsRespElementError struct {
+    	// TODO: JSONRPC error
+    }
+
+- file: wallet.go
+  todo: "ImportDescriptorsRespElementError"
+  fix: "JsonRPCError"
+- file: wallet.go
+  todo: |
+
+    type ImportMultiRespElementError struct {
+    	// TODO: JSONRPC error
+    }
+
+- file: wallet.go
+  todo: "ImportMultiRespElementError"
+  fix: "JsonRPCError"
+- file: wallet.go
+  todo: |
+
+    type ListSinceBlockRespRemoved struct {
+    	// TODO: FIX ListSinceBlockRespRemoved
+    }
+
+- file: wallet.go
+  todo: "ListSinceBlockRespRemoved"
+  fix: "ListSinceBlockRespTransactions"
+
+# Test code. Just do workarounds for the error codes -1 and -3, likely the calls will still fail (with some other code).
+
+- file: rpc_test.go
+  todo: "AddNodeReq{}"
+  fix: 'AddNodeReq{Command: "add"}'
+- file: rpc_test.go
+  todo: "SetBanReq{}"
+  fix: 'SetBanReq{Command: "add"}'
+- file: rpc_test.go
+  todo: "UnloadWalletReq{}"
+  fix: 'UnloadWalletReq{WalletName: "abc"}'
+- file: rpc_test.go
+  todo: "DisconnectNodeReq{}"
+  fix: 'DisconnectNodeReq{Address: "abc"}'
+- file: rpc_test.go
+  todo: |-
+    case -1:([^\{]*)
+    (\t*)switch name {
+  fix: |-
+    case -1:%[1]s
+    %[2]s// Suppress error for known cases without feasible workarounds.
+    %[2]sswitch name {
+    %[2]scase "PruneBlockchain":
+    %[2]s	// Cannot prune blocks because node is not in prune mode.
+    %[2]s	t.Log(err)
+    %[2]scase "EnumerateSigners":
+    %[2]s	// Error: restart bitcoind with -signer=<cmd>
+    %[2]s	t.Log(err)

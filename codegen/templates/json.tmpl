@@ -1,0 +1,44 @@
+{{define "marshal" -}}
+func (alts {{.TypeName}}) MarshalJSON() ([]byte, error) {
+{{- $length := (len .Members)}}{{range $i, $e := .Members}}
+{{- if eq $i (sub $length 1)}}
+	return json.Marshal(alts.{{.Name}})
+{{- else}}
+	if !reflect.ValueOf(alts.{{.Name}}).IsZero() {
+		return json.Marshal(alts.{{.Name}})
+	}
+{{- end}}{{end}}
+}
+
+{{end}}
+
+{{define "unmarshal" -}}
+func (alts *{{.TypeName}}) UnmarshalJSON(b []byte) error {
+	reset := *alts
+	var decoder *json.Decoder
+{{- range $i, $e := .Members}}
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.{{.Name}}) == nil {
+		return nil
+	}
+	alts.{{.Name}} = reset.{{.Name}}
+{{- end}}
+	return &UnmarshalError{B: b, structName: "{{.TypeName}}"}
+}
+
+{{end}}
+
+{{define "unmarshal-false-to-nil" -}}
+type {{.TypeName}} struct {
+	{{.TypeName}}Contents
+}
+
+func (mayBeFalse *{{.TypeName}}) UnmarshalJSON(b []byte) error {
+	if bytes.HasPrefix(b, []byte("false")) {
+		return nil
+	}
+	return json.Unmarshal(b, &mayBeFalse.{{.TypeName}}Contents)
+}
+
+{{end}}

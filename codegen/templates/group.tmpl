@@ -1,0 +1,11 @@
+{{define "group" -}}
+// THIS FILE IS GENERATED CODE, MANUAL EDITS WILL BE OVERWRITTEN
+
+package bitcoindclient
+
+import (
+{{- range .}}
+	"{{.}}"
+{{- end}}
+)
+{{end}}

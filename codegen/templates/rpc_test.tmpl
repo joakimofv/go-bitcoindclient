@@ -1,0 +1,96 @@
+{{define "rpc_test" -}}
+// THIS FILE IS GENERATED CODE, MANUAL EDITS WILL BE OVERWRITTEN
+
+package bitcoindclient
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestRpc(t *testing.T) {
+	rpcAddress, rpcUser, rpcPassword, _, err := startBitcoind()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stopBitcoind(t)
+
+	for _, name := range []string{
+{{- range .}}
+		"{{.Camelcase}}",
+{{- end}}
+	} {
+		t.Run(name, func(t *testing.T) {
+			bc, err := New(Config{
+				RpcAddress:  rpcAddress,
+				RpcUser:     rpcUser,
+				RpcPassword: rpcPassword,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer bc.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			switch name {
+{{- range .}}
+			case "{{.Camelcase}}":
+				{{if (len .Resp.Members)}}_, {{end}}err = bc.{{.Camelcase}}(ctx
+{{- if (len .Req.Members)}}, {{.Req.TypeName}}{}{{end -}}
+)
+{{- end}}
+			}
+
+			if err != nil {
+				var bErr *BitcoindError
+				if errors.As(err, &bErr) {
+					switch bErr.Code {
+					case -32600:
+						// RPC_INVALID_REQUEST
+						t.Error(err)
+					case -32601:
+						// RPC_METHOD_NOT_FOUND
+						t.Error(err)
+					case -32602:
+						// RPC_INVALID_PARAMS
+						t.Error(err)
+					case -32:
+						// RPC_METHOD_DEPRECATED    RPC method is deprecated
+						t.Error(err)
+					case -1:
+						// RPC_MISC_ERROR    std::exception thrown in command handling
+						switch name {
+						default:
+							t.Error(err)
+						}
+					case -3:
+						// RPC_TYPE_ERROR    Unexpected type was passed as parameter
+						switch name {
+						default:
+							t.Error(err)
+						}
+					case -8:
+						// RPC_INVALID_PARAMETER    Invalid, missing or duplicate parameter
+						if strings.HasPrefix(bErr.Message, "Unknown named parameter") {
+							t.Error(err)
+						} else {
+							// Likely malformed argument, application specific.
+							t.Log(err)
+						}
+					default:
+						// Sending empty arguments are sure to be rejected for various reasons,
+						// but we don't fail on anything but JSON structure mismatch.
+						t.Log(err)
+					}
+				} else {
+					t.Errorf("Internal error: %v", err)
+				}
+			}
+		})
+	}
+}
+{{end}}
