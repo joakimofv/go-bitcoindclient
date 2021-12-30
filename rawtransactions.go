@@ -95,7 +95,7 @@ type AnalyzePsbtRespInputsMissing struct {
 // Analyzes and provides information about the current status of a PSBT and its inputs
 func (bc *BitcoindClient) AnalyzePsbt(ctx context.Context, args AnalyzePsbtReq) (result AnalyzePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "analyzepsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "analyzepsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -142,7 +142,7 @@ func (alts *CombinePsbtResp) UnmarshalJSON(b []byte) error {
 // Implements the Combiner role.
 func (bc *BitcoindClient) CombinePsbt(ctx context.Context, args CombinePsbtReq) (result CombinePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "combinepsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "combinepsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -190,7 +190,7 @@ func (alts *CombineRawTransactionResp) UnmarshalJSON(b []byte) error {
 // fully signed transaction.
 func (bc *BitcoindClient) CombineRawTransaction(ctx context.Context, args CombineRawTransactionReq) (result CombineRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "combinerawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "combinerawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -254,7 +254,7 @@ func (alts *ConvertToPsbtResp) UnmarshalJSON(b []byte) error {
 // createpsbt and walletcreatefundedpsbt should be used for new applications.
 func (bc *BitcoindClient) ConvertToPsbt(ctx context.Context, args ConvertToPsbtReq) (result ConvertToPsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "converttopsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "converttopsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -384,7 +384,7 @@ func (alts *CreatePsbtResp) UnmarshalJSON(b []byte) error {
 // Implements the Creator role.
 func (bc *BitcoindClient) CreatePsbt(ctx context.Context, args CreatePsbtReq) (result CreatePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "createpsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "createpsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -517,7 +517,7 @@ func (alts *CreateRawTransactionResp) UnmarshalJSON(b []byte) error {
 // it is not stored in the wallet or transmitted to the network.
 func (bc *BitcoindClient) CreateRawTransaction(ctx context.Context, args CreateRawTransactionReq) (result CreateRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "createrawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "createrawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -769,7 +769,7 @@ type DecodePsbtRespOutputsBIP32Derivs struct {
 // Return a JSON object representing the serialized, base64-encoded partially signed Bitcoin transaction.
 func (bc *BitcoindClient) DecodePsbt(ctx context.Context, args DecodePsbtReq) (result DecodePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "decodepsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "decodepsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -925,7 +925,7 @@ type DecodeRawTransactionRespVout struct {
 // Return a JSON object representing the serialized, hex-encoded transaction.
 func (bc *BitcoindClient) DecodeRawTransaction(ctx context.Context, args DecodeRawTransactionReq) (result DecodeRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "decoderawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "decoderawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1013,7 +1013,7 @@ type DecodeScriptResp struct {
 // Decode a hex-encoded script.
 func (bc *BitcoindClient) DecodeScript(ctx context.Context, args DecodeScriptReq) (result DecodeScriptResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "decodescript", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "decodescript", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1058,7 +1058,7 @@ type FinalizePsbtResp struct {
 // Implements the Finalizer and Extractor roles.
 func (bc *BitcoindClient) FinalizePsbt(ctx context.Context, args FinalizePsbtReq) (result FinalizePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "finalizepsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "finalizepsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1216,7 +1216,7 @@ type FundRawTransactionResp struct {
 // Only pay-to-pubkey, multisig, and P2SH versions thereof are currently supported for watch-only
 func (bc *BitcoindClient) FundRawTransaction(ctx context.Context, args FundRawTransactionReq) (result FundRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "fundrawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "fundrawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1435,7 +1435,7 @@ type GetRawTransactionRespIfVerboseIsSetToTrueVout struct {
 // If verbose is 'false' or omitted, returns a string that is serialized, hex-encoded data for 'txid'.
 func (bc *BitcoindClient) GetRawTransaction(ctx context.Context, args GetRawTransactionReq) (result GetRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getrawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getrawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1482,7 +1482,7 @@ func (alts *JoinPsbtsResp) UnmarshalJSON(b []byte) error {
 // No input in any of the PSBTs can be in more than one of the PSBTs.
 func (bc *BitcoindClient) JoinPsbts(ctx context.Context, args JoinPsbtsReq) (result JoinPsbtsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "joinpsbts", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "joinpsbts", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1535,7 +1535,7 @@ func (alts *SendRawTransactionResp) UnmarshalJSON(b []byte) error {
 // Related RPCs: createrawtransaction, signrawtransactionwithkey
 func (bc *BitcoindClient) SendRawTransaction(ctx context.Context, args SendRawTransactionReq) (result SendRawTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "sendrawtransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "sendrawtransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1663,7 +1663,7 @@ type SignRawTransactionWithKeyRespErrors struct {
 // this transaction depends on but may not yet be in the block chain.
 func (bc *BitcoindClient) SignRawTransactionWithKey(ctx context.Context, args SignRawTransactionWithKeyReq) (result SignRawTransactionWithKeyResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "signrawtransactionwithkey", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "signrawtransactionwithkey", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1765,7 +1765,7 @@ type TestMempoolAcceptRespElement struct {
 // See sendrawtransaction call.
 func (bc *BitcoindClient) TestMempoolAccept(ctx context.Context, args TestMempoolAcceptReq) (result TestMempoolAcceptResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "testmempoolaccept", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "testmempoolaccept", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1859,7 +1859,7 @@ func (alts *UtxoUpdatePsbtResp) UnmarshalJSON(b []byte) error {
 // Updates all segwit inputs and outputs in a PSBT with data from output descriptors, the UTXO set or the mempool.
 func (bc *BitcoindClient) UtxoUpdatePsbt(ctx context.Context, args UtxoUpdatePsbtReq) (result UtxoUpdatePsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "utxoupdatepsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "utxoupdatepsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

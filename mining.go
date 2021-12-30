@@ -230,7 +230,7 @@ type GetBlockTemplateRespOtherwiseTransactions struct {
 //     https://github.com/bitcoin/bips/blob/master/bip-0145.mediawiki
 func (bc *BitcoindClient) GetBlockTemplate(ctx context.Context, args GetBlockTemplateReq) (result GetBlockTemplateResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblocktemplate", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblocktemplate", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -278,7 +278,7 @@ type GetMiningInfoResp struct {
 // Returns a json object containing mining-related information.
 func (bc *BitcoindClient) GetMiningInfo(ctx context.Context) (result GetMiningInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmininginfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmininginfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -327,7 +327,7 @@ func (alts *GetNetworkHashPsResp) UnmarshalJSON(b []byte) error {
 // Pass in [height] to estimate the network speed at the time when a certain block was found.
 func (bc *BitcoindClient) GetNetworkHashPs(ctx context.Context, args GetNetworkHashPsReq) (result GetNetworkHashPsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getnetworkhashps", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getnetworkhashps", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -380,7 +380,7 @@ func (alts *PrioritiseTransactionResp) UnmarshalJSON(b []byte) error {
 // Accepts the transaction into mined blocks at a higher (or lower) priority
 func (bc *BitcoindClient) PrioritiseTransaction(ctx context.Context, args PrioritiseTransactionReq) (result PrioritiseTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "prioritisetransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "prioritisetransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -428,7 +428,7 @@ func (alts *SubmitBlockResp) UnmarshalJSON(b []byte) error {
 // See https://en.bitcoin.it/wiki/BIP_0022 for full specification.
 func (bc *BitcoindClient) SubmitBlock(ctx context.Context, args SubmitBlockReq) (result SubmitBlockResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "submitblock", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "submitblock", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -446,6 +446,6 @@ type SubmitHeaderReq struct {
 // Decode the given hexdata as a header and submit it as a candidate chain tip if valid.
 // Throws when the header is invalid.
 func (bc *BitcoindClient) SubmitHeader(ctx context.Context, args SubmitHeaderReq) (err error) {
-	_, err = bc.sendRequest(ctx, "submitheader", args, false)
+	_, err = bc.sendRequest(ctx, "submitheader", args)
 	return
 }

@@ -66,6 +66,9 @@ There are also options that can be given to `Ready` to tell it to check the vers
 resp, err := bc.GetBlock(ctx, GetBlockReq{
 	Blockhash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
 })
+if err != nil {
+	// Handle err
+}
 fmt.Println(resp.Hex)
 ```
 
@@ -129,3 +132,21 @@ if errors.As(err, &bErr) {
 Other expected errors are `*url.Error` if the connection failed, or `context.Canceled`/`context.DeadlineExceeded` if the context was cancelled/expired.
 
 If running against a different version of bitcoind you might get an error of type [\*UnmarshalError](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v22#UnmarshalError) because the response format was not as expected. If you get this when running against the matching version then please report an issue.
+
+# Call Options
+
+### Connection Retries
+
+```go
+ctx = bitcoindclient.UseConnectionRetries(ctx, 2)
+```
+
+Enable retry on connection error by modifying the context with [UseConnectionRetries](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v22#UseConnectionRetries).
+
+### URI Path
+
+```go
+ctx = bitcoindclient.UseUriPath(ctx, "/wallet/mywallet")
+```
+
+Change the URI path for a call by modifying the context with [UseUriPath](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v22#UseUriPath).

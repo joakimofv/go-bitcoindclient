@@ -112,6 +112,7 @@ func TestSubscribe(t *testing.T) {
 			// Create a wallet and get an address.
 			ctx, ctxCancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer ctxCancel()
+			ctx = UseConnectionRetries(ctx, 2)
 			_, err = bc.CreateWallet(ctx, CreateWalletReq{})
 			if err != nil {
 				t.Fatal(err)

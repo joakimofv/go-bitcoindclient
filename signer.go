@@ -25,7 +25,7 @@ type EnumerateSignersResp struct {
 // Returns a list of external signers from -signer.
 func (bc *BitcoindClient) EnumerateSigners(ctx context.Context) (result EnumerateSignersResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "enumeratesigners", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "enumeratesigners", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

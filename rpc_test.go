@@ -172,6 +172,7 @@ func TestRpc(t *testing.T) {
 			defer bc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+			ctx = UseConnectionRetries(ctx, 2)
 
 			switch name {
 			case "CreateWallet":

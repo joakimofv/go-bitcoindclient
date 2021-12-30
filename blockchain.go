@@ -36,7 +36,7 @@ func (alts *GetBestBlockhashResp) UnmarshalJSON(b []byte) error {
 // Returns the hash of the best (tip) block in the most-work fully-validated chain.
 func (bc *BitcoindClient) GetBestBlockhash(ctx context.Context) (result GetBestBlockhashResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getbestblockhash", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getbestblockhash", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -221,7 +221,7 @@ type GetBlockRespForVerbosityEquals2Tx struct {
 // If verbosity is 2, returns an Object with information about block <hash> and information about each transaction.
 func (bc *BitcoindClient) GetBlock(ctx context.Context, args GetBlockReq) (result GetBlockResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblock", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblock", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -373,7 +373,7 @@ type GetBlockchainInfoRespSoftForksXXXX struct {
 // Returns an object containing various state info regarding blockchain processing.
 func (bc *BitcoindClient) GetBlockchainInfo(ctx context.Context) (result GetBlockchainInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockchaininfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockchaininfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -408,7 +408,7 @@ func (alts *GetBlockCountResp) UnmarshalJSON(b []byte) error {
 // The genesis block has height 0.
 func (bc *BitcoindClient) GetBlockCount(ctx context.Context) (result GetBlockCountResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockcount", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockcount", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -444,7 +444,7 @@ type GetBlockFilterResp struct {
 // Retrieve a BIP 157 content filter for a particular block.
 func (bc *BitcoindClient) GetBlockFilter(ctx context.Context, args GetBlockFilterReq) (result GetBlockFilterResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockfilter", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockfilter", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -485,7 +485,7 @@ func (alts *GetBlockhashResp) UnmarshalJSON(b []byte) error {
 // Returns hash of block in best-block-chain at height provided.
 func (bc *BitcoindClient) GetBlockhash(ctx context.Context, args GetBlockhashReq) (result GetBlockhashResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockhash", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockhash", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -611,7 +611,7 @@ type GetBlockHeaderRespForVerboseEqualsTrue struct {
 // If verbose is true, returns an Object with information about blockheader <hash>.
 func (bc *BitcoindClient) GetBlockHeader(ctx context.Context, args GetBlockHeaderReq) (result GetBlockHeaderResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockheader", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockheader", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -774,7 +774,7 @@ type GetBlockStatsResp struct {
 // It won't work for some heights with pruning.
 func (bc *BitcoindClient) GetBlockStats(ctx context.Context, args GetBlockStatsReq) (result GetBlockStatsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getblockstats", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getblockstats", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -841,7 +841,7 @@ type GetChainTipsRespElement struct {
 // Return information about all known tips in the block tree, including the main chain as well as orphaned branches.
 func (bc *BitcoindClient) GetChainTips(ctx context.Context) (result GetChainTipsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getchaintips", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getchaintips", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -902,7 +902,7 @@ type GetChainTxStatsResp struct {
 // Compute statistics about the total number and rate of transactions in the chain.
 func (bc *BitcoindClient) GetChainTxStats(ctx context.Context, args GetChainTxStatsReq) (result GetChainTxStatsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getchaintxstats", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getchaintxstats", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -936,7 +936,7 @@ func (alts *GetDifficultyResp) UnmarshalJSON(b []byte) error {
 // Returns the proof-of-work difficulty as a multiple of the minimum difficulty.
 func (bc *BitcoindClient) GetDifficulty(ctx context.Context) (result GetDifficultyResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getdifficulty", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getdifficulty", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1103,7 +1103,7 @@ type GetMempoolAncestorsRespForVerboseEqualsTrueTransactionID struct {
 // If txid is in the mempool, returns all in-mempool ancestors.
 func (bc *BitcoindClient) GetMempoolAncestors(ctx context.Context, args GetMempoolAncestorsReq) (result GetMempoolAncestorsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmempoolancestors", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmempoolancestors", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1270,7 +1270,7 @@ type GetMempoolDescendantsRespForVerboseEqualsTrueTransactionID struct {
 // If txid is in the mempool, returns all in-mempool descendants.
 func (bc *BitcoindClient) GetMempoolDescendants(ctx context.Context, args GetMempoolDescendantsReq) (result GetMempoolDescendantsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmempooldescendants", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmempooldescendants", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1389,7 +1389,7 @@ type GetMempoolEntryResp struct {
 // Returns mempool data for given transaction
 func (bc *BitcoindClient) GetMempoolEntry(ctx context.Context, args GetMempoolEntryReq) (result GetMempoolEntryResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmempoolentry", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmempoolentry", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1441,7 +1441,7 @@ type GetMempoolInfoResp struct {
 // Returns details on the active state of the TX memory pool.
 func (bc *BitcoindClient) GetMempoolInfo(ctx context.Context) (result GetMempoolInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmempoolinfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmempoolinfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1638,7 +1638,7 @@ type GetRawMempoolRespForVerboseEqualsFalseAndMempoolSequenceEqualsTrue struct {
 // Hint: use getmempoolentry to fetch a specific transaction from the mempool.
 func (bc *BitcoindClient) GetRawMempool(ctx context.Context, args GetRawMempoolReq) (result GetRawMempoolResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getrawmempool", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getrawmempool", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1721,7 +1721,7 @@ type GetTxOutRespOtherwise struct {
 // Returns details about an unspent transaction output.
 func (bc *BitcoindClient) GetTxOut(ctx context.Context, args GetTxOutReq) (result GetTxOutRespOtherwise, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "gettxout", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "gettxout", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1775,7 +1775,7 @@ func (alts *GetTxOutProofResp) UnmarshalJSON(b []byte) error {
 // specify the block in which the transaction is included manually (by blockhash).
 func (bc *BitcoindClient) GetTxOutProof(ctx context.Context, args GetTxOutProofReq) (result GetTxOutProofResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "gettxoutproof", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "gettxoutproof", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1886,7 +1886,7 @@ type GetTxOutSetInfoResp struct {
 // Note this call may take some time if you are not using coinstatsindex.
 func (bc *BitcoindClient) GetTxOutSetInfo(ctx context.Context, args GetTxOutSetInfoReq) (result GetTxOutSetInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "gettxoutsetinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "gettxoutsetinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1905,7 +1905,7 @@ type PreciousBlockReq struct {
 // A later preciousblock call can override the effect of an earlier one.
 // The effects of preciousblock are not retained across restarts.
 func (bc *BitcoindClient) PreciousBlock(ctx context.Context, args PreciousBlockReq) (err error) {
-	_, err = bc.sendRequest(ctx, "preciousblock", args, false)
+	_, err = bc.sendRequest(ctx, "preciousblock", args)
 	return
 }
 
@@ -1944,7 +1944,7 @@ func (alts *PruneBlockchainResp) UnmarshalJSON(b []byte) error {
 // PruneBlockchain RPC method.
 func (bc *BitcoindClient) PruneBlockchain(ctx context.Context, args PruneBlockchainReq) (result PruneBlockchainResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "pruneblockchain", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "pruneblockchain", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1954,7 +1954,7 @@ func (bc *BitcoindClient) PruneBlockchain(ctx context.Context, args PruneBlockch
 // SaveMempool RPC method.
 // Dumps the mempool to disk. It will fail until the previous dump is fully loaded.
 func (bc *BitcoindClient) SaveMempool(ctx context.Context) (err error) {
-	_, err = bc.sendRequest(ctx, "savemempool", nil, false)
+	_, err = bc.sendRequest(ctx, "savemempool", nil)
 	return
 }
 
@@ -2159,7 +2159,7 @@ type ScanTxOutSetRespWhenActionEqualsStartUnspents struct {
 // For more information on output descriptors, see the documentation in the doc/descriptors.md file.
 func (bc *BitcoindClient) ScanTxOutSet(ctx context.Context, args ScanTxOutSetReq) (result ScanTxOutSetResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "scantxoutset", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "scantxoutset", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2218,7 +2218,7 @@ func (alts *VerifyChainResp) UnmarshalJSON(b []byte) error {
 // Verifies blockchain database.
 func (bc *BitcoindClient) VerifyChain(ctx context.Context, args VerifyChainReq) (result VerifyChainResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "verifychain", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "verifychain", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2263,7 +2263,7 @@ func (alts *VerifyTxOutProofResp) UnmarshalJSON(b []byte) error {
 // and throwing an RPC error if the block is not in our best chain
 func (bc *BitcoindClient) VerifyTxOutProof(ctx context.Context, args VerifyTxOutProofReq) (result VerifyTxOutProofResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "verifytxoutproof", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "verifytxoutproof", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

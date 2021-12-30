@@ -23,7 +23,7 @@ type AbandonTransactionReq struct {
 // It only works on transactions which are not included in a block and are not currently in the mempool.
 // It has no effect on transactions which are already abandoned.
 func (bc *BitcoindClient) AbandonTransaction(ctx context.Context, args AbandonTransactionReq) (err error) {
-	_, err = bc.sendRequest(ctx, "abandontransaction", args, false)
+	_, err = bc.sendRequest(ctx, "abandontransaction", args)
 	return
 }
 
@@ -55,7 +55,7 @@ func (alts *AbortRescanResp) UnmarshalJSON(b []byte) error {
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) AbortRescan(ctx context.Context) (result AbortRescanResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "abortrescan", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "abortrescan", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -112,7 +112,7 @@ type AddMultisigAddressResp struct {
 // If 'label' is specified, assign address to that label.
 func (bc *BitcoindClient) AddMultisigAddress(ctx context.Context, args AddMultisigAddressReq) (result AddMultisigAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "addmultisigaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "addmultisigaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -129,7 +129,7 @@ type BackupWalletReq struct {
 // BackupWallet RPC method.
 // Safely copies current wallet file to destination, which can be a directory or a path with filename.
 func (bc *BitcoindClient) BackupWallet(ctx context.Context, args BackupWalletReq) (err error) {
-	_, err = bc.sendRequest(ctx, "backupwallet", args, false)
+	_, err = bc.sendRequest(ctx, "backupwallet", args)
 	return
 }
 
@@ -191,7 +191,7 @@ type BumpFeeResp struct {
 // * WARNING: before version 0.21, fee_rate was in BTC/kvB. As of 0.21, fee_rate is in sat/vB. *
 func (bc *BitcoindClient) BumpFee(ctx context.Context, args BumpFeeReq) (result BumpFeeResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "bumpfee", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "bumpfee", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -255,7 +255,7 @@ type CreateWalletResp struct {
 // Creates and loads a new wallet.
 func (bc *BitcoindClient) CreateWallet(ctx context.Context, args CreateWalletReq) (result CreateWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "createwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "createwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -297,7 +297,7 @@ func (alts *DumpPrivkeyResp) UnmarshalJSON(b []byte) error {
 // Then the importprivkey can be used with this output
 func (bc *BitcoindClient) DumpPrivkey(ctx context.Context, args DumpPrivkeyReq) (result DumpPrivkeyResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "dumpprivkey", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "dumpprivkey", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -327,7 +327,7 @@ type DumpWalletResp struct {
 // only backing up the seed itself, and must be backed up too (e.g. ensure you back up the whole dumpfile).
 func (bc *BitcoindClient) DumpWallet(ctx context.Context, args DumpWalletReq) (result DumpWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "dumpwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "dumpwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -372,7 +372,7 @@ func (alts *EncryptWalletResp) UnmarshalJSON(b []byte) error {
 // If the wallet is already encrypted, use the walletpassphrasechange call.
 func (bc *BitcoindClient) EncryptWallet(ctx context.Context, args EncryptWalletReq) (result EncryptWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "encryptwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "encryptwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -389,7 +389,7 @@ type GetAddressesByLabelReq struct {
 // GetAddressesByLabel RPC method.
 // Returns the list of addresses assigned the specified label.
 func (bc *BitcoindClient) GetAddressesByLabel(ctx context.Context, args GetAddressesByLabelReq) (err error) {
-	_, err = bc.sendRequest(ctx, "getaddressesbylabel", args, false)
+	_, err = bc.sendRequest(ctx, "getaddressesbylabel", args)
 	return
 }
 
@@ -525,7 +525,7 @@ type GetAddressInfoResp struct {
 // Some of the information will only be present if the address is in the active wallet.
 func (bc *BitcoindClient) GetAddressInfo(ctx context.Context, args GetAddressInfoReq) (result GetAddressInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getaddressinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getaddressinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -580,7 +580,7 @@ func (alts *GetBalanceResp) UnmarshalJSON(b []byte) error {
 // thus affected by options which limit spendability such as -spendzeroconfchange.
 func (bc *BitcoindClient) GetBalance(ctx context.Context, args GetBalanceReq) (result GetBalanceResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getbalance", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getbalance", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -634,7 +634,7 @@ type GetBalancesResp struct {
 // Returns an object with all balances in BTC.
 func (bc *BitcoindClient) GetBalances(ctx context.Context) (result GetBalancesResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getbalances", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getbalances", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -683,7 +683,7 @@ func (alts *GetNewAddressResp) UnmarshalJSON(b []byte) error {
 // so payments received with the address will be associated with 'label'.
 func (bc *BitcoindClient) GetNewAddress(ctx context.Context, args GetNewAddressReq) (result GetNewAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getnewaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getnewaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -726,7 +726,7 @@ func (alts *GetRawChangeaddressResp) UnmarshalJSON(b []byte) error {
 // This is for use with raw transactions, NOT normal use.
 func (bc *BitcoindClient) GetRawChangeaddress(ctx context.Context, args GetRawChangeaddressReq) (result GetRawChangeaddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getrawchangeaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getrawchangeaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -772,7 +772,7 @@ func (alts *GetReceivedByAddressResp) UnmarshalJSON(b []byte) error {
 // Returns the total amount received by the given address in transactions with at least minconf confirmations.
 func (bc *BitcoindClient) GetReceivedByAddress(ctx context.Context, args GetReceivedByAddressReq) (result GetReceivedByAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getreceivedbyaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getreceivedbyaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -818,7 +818,7 @@ func (alts *GetReceivedByLabelResp) UnmarshalJSON(b []byte) error {
 // Returns the total amount received by addresses with <label> in transactions with at least [minconf] confirmations.
 func (bc *BitcoindClient) GetReceivedByLabel(ctx context.Context, args GetReceivedByLabelReq) (result GetReceivedByLabelResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getreceivedbylabel", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getreceivedbylabel", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -987,7 +987,7 @@ type GetTransactionRespDetails struct {
 // Get detailed information about in-wallet transaction <txid>
 func (bc *BitcoindClient) GetTransaction(ctx context.Context, args GetTransactionReq) (result GetTransactionResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "gettransaction", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "gettransaction", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1022,7 +1022,7 @@ func (alts *GetUnconfirmedBalanceResp) UnmarshalJSON(b []byte) error {
 // Identical to getbalances().mine.untrusted_pending
 func (bc *BitcoindClient) GetUnconfirmedBalance(ctx context.Context) (result GetUnconfirmedBalanceResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getunconfirmedbalance", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getunconfirmedbalance", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1128,7 +1128,7 @@ type GetWalletInfoRespScanningContents struct {
 // Returns an object containing various wallet state info.
 func (bc *BitcoindClient) GetWalletInfo(ctx context.Context) (result GetWalletInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getwalletinfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getwalletinfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1167,7 +1167,7 @@ type ImportAddressReq struct {
 // as change, and not show up in many RPCs.
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) ImportAddress(ctx context.Context, args ImportAddressReq) (err error) {
-	_, err = bc.sendRequest(ctx, "importaddress", args, false)
+	_, err = bc.sendRequest(ctx, "importaddress", args)
 	return
 }
 
@@ -1275,7 +1275,7 @@ type ImportDescriptorsRespElement struct {
 // may report that the imported keys, addresses or scripts exist but related transactions are still missing.
 func (bc *BitcoindClient) ImportDescriptors(ctx context.Context, args ImportDescriptorsReq) (result ImportDescriptorsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "importdescriptors", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "importdescriptors", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1432,7 +1432,7 @@ type ImportMultiRespElement struct {
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) ImportMulti(ctx context.Context, args ImportMultiReq) (result ImportMultiResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "importmulti", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "importmulti", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1463,7 +1463,7 @@ type ImportPrivkeyReq struct {
 // may report that the imported key exists but related transactions are still missing, leading to temporarily incorrect/bogus balances and unspent outputs until rescan completes.
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) ImportPrivkey(ctx context.Context, args ImportPrivkeyReq) (err error) {
-	_, err = bc.sendRequest(ctx, "importprivkey", args, false)
+	_, err = bc.sendRequest(ctx, "importprivkey", args)
 	return
 }
 
@@ -1481,7 +1481,7 @@ type ImportPrunedFundsReq struct {
 // ImportPrunedFunds RPC method.
 // Imports funds without rescan. Corresponding address or script must previously be included in wallet. Aimed towards pruned wallets. The end-user is responsible to import additional transactions that subsequently spend the imported outputs or rescan after the point in the blockchain the transaction is included.
 func (bc *BitcoindClient) ImportPrunedFunds(ctx context.Context, args ImportPrunedFundsReq) (err error) {
-	_, err = bc.sendRequest(ctx, "importprunedfunds", args, false)
+	_, err = bc.sendRequest(ctx, "importprunedfunds", args)
 	return
 }
 
@@ -1509,7 +1509,7 @@ type ImportPubkeyReq struct {
 // may report that the imported pubkey exists but related transactions are still missing, leading to temporarily incorrect/bogus balances and unspent outputs until rescan completes.
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) ImportPubkey(ctx context.Context, args ImportPubkeyReq) (err error) {
-	_, err = bc.sendRequest(ctx, "importpubkey", args, false)
+	_, err = bc.sendRequest(ctx, "importpubkey", args)
 	return
 }
 
@@ -1524,7 +1524,7 @@ type ImportWalletReq struct {
 // Imports keys from a wallet dump file (see dumpwallet). Requires a new wallet backup to include imported keys.
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) ImportWallet(ctx context.Context, args ImportWalletReq) (err error) {
-	_, err = bc.sendRequest(ctx, "importwallet", args, false)
+	_, err = bc.sendRequest(ctx, "importwallet", args)
 	return
 }
 
@@ -1540,7 +1540,7 @@ type KeypoolRefillReq struct {
 // Fills the keypool.
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) KeypoolRefill(ctx context.Context, args KeypoolRefillReq) (err error) {
-	_, err = bc.sendRequest(ctx, "keypoolrefill", args, false)
+	_, err = bc.sendRequest(ctx, "keypoolrefill", args)
 	return
 }
 
@@ -1618,7 +1618,7 @@ func (alts *ListAddressGroupingsRespElement) UnmarshalJSON(b []byte) error {
 // in past transactions
 func (bc *BitcoindClient) ListAddressGroupings(ctx context.Context) (result ListAddressGroupingsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listaddressgroupings", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listaddressgroupings", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1677,7 +1677,7 @@ type ListDescriptorsRespDescriptors struct {
 // List descriptors imported into a descriptor-enabled wallet.
 func (bc *BitcoindClient) ListDescriptors(ctx context.Context) (result ListDescriptorsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listdescriptors", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listdescriptors", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1721,7 +1721,7 @@ func (alts *ListLabelsResp) UnmarshalJSON(b []byte) error {
 // Returns the list of all labels, or labels that are assigned to addresses with a specific purpose.
 func (bc *BitcoindClient) ListLabels(ctx context.Context, args ListLabelsReq) (result ListLabelsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listlabels", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listlabels", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1769,7 +1769,7 @@ type ListLockUnspentRespElement struct {
 // See the lockunspent call to lock and unlock transactions for spending.
 func (bc *BitcoindClient) ListLockUnspent(ctx context.Context) (result ListLockUnspentResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listlockunspent", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listlockunspent", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1857,7 +1857,7 @@ type ListReceivedByAddressRespElement struct {
 // List balances by receiving address.
 func (bc *BitcoindClient) ListReceivedByAddress(ctx context.Context, args ListReceivedByAddressReq) (result ListReceivedByAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listreceivedbyaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listreceivedbyaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1930,7 +1930,7 @@ type ListReceivedByLabelRespElement struct {
 // List received transactions by label.
 func (bc *BitcoindClient) ListReceivedByLabel(ctx context.Context, args ListReceivedByLabelReq) (result ListReceivedByLabelResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listreceivedbylabel", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listreceivedbylabel", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2105,7 +2105,7 @@ type ListSinceBlockRespTransactions struct {
 // Additionally, if include_removed is set, transactions affecting the wallet which were removed are returned in the "removed" array.
 func (bc *BitcoindClient) ListSinceBlock(ctx context.Context, args ListSinceBlockReq) (result ListSinceBlockResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listsinceblock", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listsinceblock", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2277,7 +2277,7 @@ type ListTransactionsRespElement struct {
 // Returns up to 'count' most recent transactions skipping the first 'from' transactions.
 func (bc *BitcoindClient) ListTransactions(ctx context.Context, args ListTransactionsReq) (result ListTransactionsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listtransactions", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listtransactions", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2436,7 +2436,7 @@ type ListUnspentRespElement struct {
 // Optionally filter to only include txouts paid to specified addresses.
 func (bc *BitcoindClient) ListUnspent(ctx context.Context, args ListUnspentReq) (result ListUnspentResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listunspent", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listunspent", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2465,7 +2465,7 @@ type ListWalletDirRespWallets struct {
 // Returns a list of wallets in the wallet directory.
 func (bc *BitcoindClient) ListWalletDir(ctx context.Context) (result ListWalletDirResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listwalletdir", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listwalletdir", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2503,7 +2503,7 @@ func (alts *ListWalletsResp) UnmarshalJSON(b []byte) error {
 // For full information on the wallet, use "getwalletinfo"
 func (bc *BitcoindClient) ListWallets(ctx context.Context) (result ListWalletsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listwallets", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listwallets", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2540,7 +2540,7 @@ type LoadWalletResp struct {
 // applied to the new wallet (eg -rescan, etc).
 func (bc *BitcoindClient) LoadWallet(ctx context.Context, args LoadWalletReq) (result LoadWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "loadwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "loadwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2608,7 +2608,7 @@ func (alts *LockUnspentResp) UnmarshalJSON(b []byte) error {
 // Also see the listunspent call
 func (bc *BitcoindClient) LockUnspent(ctx context.Context, args LockUnspentReq) (result LockUnspentResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "lockunspent", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "lockunspent", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2674,7 +2674,7 @@ type PsbtBumpFeeResp struct {
 // * WARNING: before version 0.21, fee_rate was in BTC/kvB. As of 0.21, fee_rate is in sat/vB. *
 func (bc *BitcoindClient) PsbtBumpFee(ctx context.Context, args PsbtBumpFeeReq) (result PsbtBumpFeeResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "psbtbumpfee", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "psbtbumpfee", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2691,7 +2691,7 @@ type RemovePrunedFundsReq struct {
 // RemovePrunedFunds RPC method.
 // Deletes the specified transaction from the wallet. Meant for use with pruned wallets and as a companion to importprunedfunds. This will affect wallet balances.
 func (bc *BitcoindClient) RemovePrunedFunds(ctx context.Context, args RemovePrunedFundsReq) (err error) {
-	_, err = bc.sendRequest(ctx, "removeprunedfunds", args, false)
+	_, err = bc.sendRequest(ctx, "removeprunedfunds", args)
 	return
 }
 
@@ -2725,7 +2725,7 @@ type RescanBlockchainResp struct {
 // Note: Use "getwalletinfo" to query the scanning progress.
 func (bc *BitcoindClient) RescanBlockchain(ctx context.Context, args RescanBlockchainReq) (result RescanBlockchainResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "rescanblockchain", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "rescanblockchain", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -2998,7 +2998,7 @@ type SendResp struct {
 // Send a transaction.
 func (bc *BitcoindClient) Send(ctx context.Context, args SendReq) (result SendResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "send", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "send", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3130,7 +3130,7 @@ type SendManyRespIfVerboseIsSetToTrue struct {
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) SendMany(ctx context.Context, args SendManyReq) (result SendManyResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "sendmany", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "sendmany", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3262,7 +3262,7 @@ type SendToAddressRespIfVerboseIsSetToTrue struct {
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) SendToAddress(ctx context.Context, args SendToAddressReq) (result SendToAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "sendtoaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "sendtoaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3296,7 +3296,7 @@ type SetHDSeedReq struct {
 // Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) SetHDSeed(ctx context.Context, args SetHDSeedReq) (err error) {
-	_, err = bc.sendRequest(ctx, "sethdseed", args, false)
+	_, err = bc.sendRequest(ctx, "sethdseed", args)
 	return
 }
 
@@ -3314,7 +3314,7 @@ type SetLabelReq struct {
 // SetLabel RPC method.
 // Sets the label associated with the given address.
 func (bc *BitcoindClient) SetLabel(ctx context.Context, args SetLabelReq) (err error) {
-	_, err = bc.sendRequest(ctx, "setlabel", args, false)
+	_, err = bc.sendRequest(ctx, "setlabel", args)
 	return
 }
 
@@ -3353,7 +3353,7 @@ func (alts *SetTxFeeResp) UnmarshalJSON(b []byte) error {
 // Can be deactivated by passing 0 as the fee. In that case automatic fee selection will be used by default.
 func (bc *BitcoindClient) SetTxFee(ctx context.Context, args SetTxFeeReq) (result SetTxFeeResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "settxfee", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "settxfee", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3393,7 +3393,7 @@ type SetWalletFlagResp struct {
 // Change the state of the given wallet flag for a wallet.
 func (bc *BitcoindClient) SetWalletFlag(ctx context.Context, args SetWalletFlagReq) (result SetWalletFlagResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "setwalletflag", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "setwalletflag", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3439,7 +3439,7 @@ func (alts *SignMessageResp) UnmarshalJSON(b []byte) error {
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) SignMessage(ctx context.Context, args SignMessageReq) (result SignMessageResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "signmessage", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "signmessage", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3557,7 +3557,7 @@ type SignRawTransactionWithWalletRespErrors struct {
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) SignRawTransactionWithWallet(ctx context.Context, args SignRawTransactionWithWalletReq) (result SignRawTransactionWithWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "signrawtransactionwithwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "signrawtransactionwithwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3590,7 +3590,7 @@ type UnloadWalletResp struct {
 // Specifying the wallet name on a wallet endpoint is invalid.
 func (bc *BitcoindClient) UnloadWallet(ctx context.Context, args UnloadWalletReq) (result UnloadWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "unloadwallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "unloadwallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3635,7 +3635,7 @@ type UpgradeWalletResp struct {
 // New keys may be generated and a new wallet backup will need to be made.
 func (bc *BitcoindClient) UpgradeWallet(ctx context.Context, args UpgradeWalletReq) (result UpgradeWalletResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "upgradewallet", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "upgradewallet", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3850,7 +3850,7 @@ type WalletCreateFundedPsbtResp struct {
 // Implements the Creator and Updater roles.
 func (bc *BitcoindClient) WalletCreateFundedPsbt(ctx context.Context, args WalletCreateFundedPsbtReq) (result WalletCreateFundedPsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "walletcreatefundedpsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "walletcreatefundedpsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3876,7 +3876,7 @@ type WalletDisplayAddressResp struct {
 // Display address on an external signer for verification.
 func (bc *BitcoindClient) WalletDisplayAddress(ctx context.Context, args WalletDisplayAddressReq) (result WalletDisplayAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "walletdisplayaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "walletdisplayaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -3888,7 +3888,7 @@ func (bc *BitcoindClient) WalletDisplayAddress(ctx context.Context, args WalletD
 // After calling this method, you will need to call walletpassphrase again
 // before being able to call any methods which require the wallet to be unlocked.
 func (bc *BitcoindClient) WalletLock(ctx context.Context) (err error) {
-	_, err = bc.sendRequest(ctx, "walletlock", nil, false)
+	_, err = bc.sendRequest(ctx, "walletlock", nil)
 	return
 }
 
@@ -3910,7 +3910,7 @@ type WalletPassphraseReq struct {
 // Issuing the walletpassphrase command while the wallet is already unlocked will set a new unlock
 // time that overrides the old one.
 func (bc *BitcoindClient) WalletPassphrase(ctx context.Context, args WalletPassphraseReq) (err error) {
-	_, err = bc.sendRequest(ctx, "walletpassphrase", args, false)
+	_, err = bc.sendRequest(ctx, "walletpassphrase", args)
 	return
 }
 
@@ -3928,7 +3928,7 @@ type WalletPassphraseChangeReq struct {
 // WalletPassphraseChange RPC method.
 // Changes the wallet passphrase from 'oldpassphrase' to 'newpassphrase'.
 func (bc *BitcoindClient) WalletPassphraseChange(ctx context.Context, args WalletPassphraseChangeReq) (err error) {
-	_, err = bc.sendRequest(ctx, "walletpassphrasechange", args, false)
+	_, err = bc.sendRequest(ctx, "walletpassphrasechange", args)
 	return
 }
 
@@ -3987,7 +3987,7 @@ type WalletProcessPsbtResp struct {
 // Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
 func (bc *BitcoindClient) WalletProcessPsbt(ctx context.Context, args WalletProcessPsbtReq) (result WalletProcessPsbtResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "walletprocesspsbt", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "walletprocesspsbt", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

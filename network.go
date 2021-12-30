@@ -26,14 +26,14 @@ type AddNodeReq struct {
 // full nodes/support SegWit as other outbound peers are (though such peers will not be synced from).
 // Addnode connections are limited to 8 at a time and are counted separately from the -maxconnections limit.
 func (bc *BitcoindClient) AddNode(ctx context.Context, args AddNodeReq) (err error) {
-	_, err = bc.sendRequest(ctx, "addnode", args, false)
+	_, err = bc.sendRequest(ctx, "addnode", args)
 	return
 }
 
 // ClearBanned RPC method.
 // Clear all banned IPs.
 func (bc *BitcoindClient) ClearBanned(ctx context.Context) (err error) {
-	_, err = bc.sendRequest(ctx, "clearbanned", nil, false)
+	_, err = bc.sendRequest(ctx, "clearbanned", nil)
 	return
 }
 
@@ -55,7 +55,7 @@ type DisconnectNodeReq struct {
 // Strictly one out of 'address' and 'nodeid' can be provided to identify the node.
 // To disconnect by nodeid, either set 'address' to the empty string, or call using the named 'nodeid' argument only.
 func (bc *BitcoindClient) DisconnectNode(ctx context.Context, args DisconnectNodeReq) (err error) {
-	_, err = bc.sendRequest(ctx, "disconnectnode", args, false)
+	_, err = bc.sendRequest(ctx, "disconnectnode", args)
 	return
 }
 
@@ -126,7 +126,7 @@ type GetAddedNodeInfoRespElementAddresses struct {
 // (note that onetry addnodes are not listed here)
 func (bc *BitcoindClient) GetAddedNodeInfo(ctx context.Context, args GetAddedNodeInfoReq) (result GetAddedNodeInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getaddednodeinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getaddednodeinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -160,7 +160,7 @@ func (alts *GetConnectionCountResp) UnmarshalJSON(b []byte) error {
 // Returns the number of connections to other nodes.
 func (bc *BitcoindClient) GetConnectionCount(ctx context.Context) (result GetConnectionCountResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getconnectioncount", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getconnectioncount", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -217,7 +217,7 @@ type GetNetTotalsResp struct {
 // and current time.
 func (bc *BitcoindClient) GetNetTotals(ctx context.Context) (result GetNetTotalsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getnettotals", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getnettotals", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -345,7 +345,7 @@ type GetNetworkInfoRespLocalAddresses struct {
 // Returns an object containing various state info regarding P2P networking.
 func (bc *BitcoindClient) GetNetworkInfo(ctx context.Context) (result GetNetworkInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getnetworkinfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getnetworkinfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -417,7 +417,7 @@ type GetNodeAddressesRespElement struct {
 // Return known addresses, which can potentially be used to find new nodes in the network.
 func (bc *BitcoindClient) GetNodeAddresses(ctx context.Context, args GetNodeAddressesReq) (result GetNodeAddressesResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getnodeaddresses", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getnodeaddresses", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -596,7 +596,7 @@ type GetPeerInfoRespElement struct {
 // Returns data about each connected network node as a json array of objects.
 func (bc *BitcoindClient) GetPeerInfo(ctx context.Context) (result GetPeerInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getpeerinfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getpeerinfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -655,7 +655,7 @@ type ListBannedRespElement struct {
 // List all manually banned IPs/Subnets.
 func (bc *BitcoindClient) ListBanned(ctx context.Context) (result ListBannedResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listbanned", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listbanned", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -667,7 +667,7 @@ func (bc *BitcoindClient) ListBanned(ctx context.Context) (result ListBannedResp
 // Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.
 // Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping.
 func (bc *BitcoindClient) Ping(ctx context.Context) (err error) {
-	_, err = bc.sendRequest(ctx, "ping", nil, false)
+	_, err = bc.sendRequest(ctx, "ping", nil)
 	return
 }
 
@@ -695,7 +695,7 @@ type SetBanReq struct {
 // SetBan RPC method.
 // Attempts to add or remove an IP/Subnet from the banned list.
 func (bc *BitcoindClient) SetBan(ctx context.Context, args SetBanReq) (err error) {
-	_, err = bc.sendRequest(ctx, "setban", args, false)
+	_, err = bc.sendRequest(ctx, "setban", args)
 	return
 }
 
@@ -733,7 +733,7 @@ func (alts *SetNetworkActiveResp) UnmarshalJSON(b []byte) error {
 // Disable/enable all p2p network activity.
 func (bc *BitcoindClient) SetNetworkActive(ctx context.Context, args SetNetworkActiveReq) (result SetNetworkActiveResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "setnetworkactive", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "setnetworkactive", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

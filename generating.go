@@ -41,7 +41,7 @@ type GenerateBlockResp struct {
 // Mine a block with a set of ordered transactions immediately to a specified address or descriptor (before the RPC call returns)
 func (bc *BitcoindClient) GenerateBlock(ctx context.Context, args GenerateBlockReq) (result GenerateBlockResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "generateblock", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "generateblock", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -95,7 +95,7 @@ func (alts *GenerateToAddressResp) UnmarshalJSON(b []byte) error {
 // Mine blocks immediately to a specified address (before the RPC call returns)
 func (bc *BitcoindClient) GenerateToAddress(ctx context.Context, args GenerateToAddressReq) (result GenerateToAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "generatetoaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "generatetoaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -149,7 +149,7 @@ func (alts *GenerateToDescriptorResp) UnmarshalJSON(b []byte) error {
 // Mine blocks immediately to a specified descriptor (before the RPC call returns)
 func (bc *BitcoindClient) GenerateToDescriptor(ctx context.Context, args GenerateToDescriptorReq) (result GenerateToDescriptorResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "generatetodescriptor", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "generatetodescriptor", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

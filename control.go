@@ -96,7 +96,7 @@ type GetMemoryInfoRespModeStats struct {
 // Returns an object containing information about memory usage.
 func (bc *BitcoindClient) GetMemoryInfo(ctx context.Context, args GetMemoryInfoReq) (result GetMemoryInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getmemoryinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getmemoryinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -135,7 +135,7 @@ type GetRpcInfoRespActiveCommands struct {
 // Returns details of the RPC server.
 func (bc *BitcoindClient) GetRpcInfo(ctx context.Context) (result GetRpcInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getrpcinfo", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getrpcinfo", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -177,7 +177,7 @@ func (alts *HelpResp) UnmarshalJSON(b []byte) error {
 // List all commands, or get help for a specified command.
 func (bc *BitcoindClient) Help(ctx context.Context, args HelpReq) (result HelpResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "help", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "help", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -216,7 +216,7 @@ type LoggingReq struct {
 //   - "all",  "1" : represent all logging categories.
 //   - "none", "0" : even if other logging categories are specified, ignore all of them.
 func (bc *BitcoindClient) Logging(ctx context.Context, args LoggingReq) (err error) {
-	_, err = bc.sendRequest(ctx, "logging", args, false)
+	_, err = bc.sendRequest(ctx, "logging", args)
 	return
 }
 
@@ -247,7 +247,7 @@ func (alts *StopResp) UnmarshalJSON(b []byte) error {
 // Request a graceful shutdown of Bitcoin Core.
 func (bc *BitcoindClient) Stop(ctx context.Context) (result StopResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "stop", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "stop", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -281,7 +281,7 @@ func (alts *UptimeResp) UnmarshalJSON(b []byte) error {
 // Returns the total uptime of the server.
 func (bc *BitcoindClient) Uptime(ctx context.Context) (result UptimeResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "uptime", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "uptime", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

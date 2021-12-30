@@ -70,7 +70,7 @@ func (bc *BitcoindClient) Ready(opts ...ReadyOption) (err error) {
 		// Modified bc.GetNetworkInfo to skip retries.
 		var result GetNetworkInfoResp
 		var resultRaw json.RawMessage
-		if resultRaw, err = bc.sendRequest(context.Background(), "getnetworkinfo", nil, true); err != nil {
+		if resultRaw, err = bc.sendRequest(context.Background(), "getnetworkinfo", nil); err != nil {
 			return
 		}
 		if err = json.Unmarshal(resultRaw, &result); err != nil {

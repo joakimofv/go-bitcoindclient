@@ -30,12 +30,12 @@
 func (bc *BitcoindClient) {{.Camelcase}}(ctx context.Context{{if (len .Req.Members)}}, args {{.Req.TypeName}}{{end}}) ({{if (len .Resp.Members)}}result {{.Resp.TypeName}}, {{end}}err error) {
 {{- if (len .Resp.Members)}}
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}}, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}}); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
 {{- else}}
-	_, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}}, false)
+	_, err = bc.sendRequest(ctx, "{{.Lowercase}}", {{if (len .Req.Members)}}args{{else}}nil{{end}})
 {{- end}}
 	return
 }

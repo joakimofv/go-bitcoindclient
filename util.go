@@ -51,7 +51,7 @@ type CreateMultisigResp struct {
 // It returns a json object with the address and redeemScript.
 func (bc *BitcoindClient) CreateMultisig(ctx context.Context, args CreateMultisigReq) (result CreateMultisigResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "createmultisig", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "createmultisig", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -107,7 +107,7 @@ func (alts *DeriveAddressesResp) UnmarshalJSON(b []byte) error {
 // For more information on output descriptors, see the documentation in the doc/descriptors.md file.
 func (bc *BitcoindClient) DeriveAddresses(ctx context.Context, args DeriveAddressesReq) (result DeriveAddressesResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "deriveaddresses", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "deriveaddresses", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -178,7 +178,7 @@ type EstimateSmartFeeResp struct {
 // in BIP 141 (witness data is discounted).
 func (bc *BitcoindClient) EstimateSmartFee(ctx context.Context, args EstimateSmartFeeReq) (result EstimateSmartFeeResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "estimatesmartfee", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "estimatesmartfee", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -221,7 +221,7 @@ type GetDescriptorInfoResp struct {
 // Analyses a descriptor.
 func (bc *BitcoindClient) GetDescriptorInfo(ctx context.Context, args GetDescriptorInfoReq) (result GetDescriptorInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getdescriptorinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getdescriptorinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -257,7 +257,7 @@ type GetIndexInfoResp struct {
 // Returns the status of one or all available indices currently running in the node.
 func (bc *BitcoindClient) GetIndexInfo(ctx context.Context, args GetIndexInfoReq) (result GetIndexInfoResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getindexinfo", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getindexinfo", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -302,7 +302,7 @@ func (alts *SignMessageWithPrivkeyResp) UnmarshalJSON(b []byte) error {
 // Sign a message with the private key of an address
 func (bc *BitcoindClient) SignMessageWithPrivkey(ctx context.Context, args SignMessageWithPrivkeyReq) (result SignMessageWithPrivkeyResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "signmessagewithprivkey", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "signmessagewithprivkey", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -357,7 +357,7 @@ type ValidateAddressResp struct {
 // Return information about the given bitcoin address.
 func (bc *BitcoindClient) ValidateAddress(ctx context.Context, args ValidateAddressReq) (result ValidateAddressResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "validateaddress", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "validateaddress", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -406,7 +406,7 @@ func (alts *VerifyMessageResp) UnmarshalJSON(b []byte) error {
 // Verify a signed message
 func (bc *BitcoindClient) VerifyMessage(ctx context.Context, args VerifyMessageReq) (result VerifyMessageResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "verifymessage", args, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "verifymessage", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

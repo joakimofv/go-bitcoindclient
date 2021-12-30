@@ -52,7 +52,7 @@ type GetZmqNotificationsRespElement struct {
 // Returns information about the active ZeroMQ notifications.
 func (bc *BitcoindClient) GetZmqNotifications(ctx context.Context) (result GetZmqNotificationsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "getzmqnotifications", nil, false); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "getzmqnotifications", nil); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)

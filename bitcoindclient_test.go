@@ -48,7 +48,7 @@ func TestReady(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer cancel()
-				_, err = bc.CreateWallet(context.Background(), CreateWalletReq{})
+				_, err = bc.CreateWallet(UseConnectionRetries(context.Background(), 2), CreateWalletReq{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -158,6 +158,7 @@ func TestSomeRpc(t *testing.T) {
 				t.Run(method, func(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
+					ctx = UseConnectionRetries(ctx, -1)
 
 					var result interface{}
 					var err error

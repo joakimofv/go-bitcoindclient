@@ -51,13 +51,22 @@ func (err *UnmarshalError) Error() string {
 }
 
 type uriPathKey struct{}
+type retriesKey struct{}
 
 // UseUriPath changes the RpcUriPath for a single request, when applied to that requests context.
 func UseUriPath(ctx context.Context, newPath string) context.Context {
 	return context.WithValue(ctx, uriPathKey{}, newPath)
 }
 
-func (bc *BitcoindClient) sendRequest(ctx context.Context, method string, paramsStruct interface{}, oneShot bool) (result json.RawMessage, err error) {
+// UseConnectionRetries enables retries on connection failure, as many as the given number.
+// Negative number for infinite retries, 0 for no retries (default).
+//
+// If the context is canceled or expired the latest connection error will be returned instead of context.Canceled/context.DeadlineExceeded.
+func UseConnectionRetries(ctx context.Context, retries int) context.Context {
+	return context.WithValue(ctx, retriesKey{}, retries)
+}
+
+func (bc *BitcoindClient) sendRequest(ctx context.Context, method string, paramsStruct interface{}) (result json.RawMessage, err error) {
 	if bc.Cfg.RpcAddress == "" {
 		err = ErrRpcDisabled
 		return
@@ -85,7 +94,11 @@ func (bc *BitcoindClient) sendRequest(ctx context.Context, method string, params
 	var nonCtxErr error
 	buf := new(bytes.Buffer)
 	backoff := 250 * time.Millisecond // The time it takes to start up bitcoind in regtest mode.
-	for {
+	retries := 0
+	if r, ok := ctx.Value(retriesKey{}).(int); ok {
+		retries = r
+	}
+	for i := 0; true; i++ {
 		buf.Reset()
 		buf.Write(body)
 		var req *http.Request
@@ -104,10 +117,13 @@ func (bc *BitcoindClient) sendRequest(ctx context.Context, method string, params
 		// Send the request, get a response.
 		resp, err = bc.httpClient.Do(req)
 		if err != nil {
-			if ctx.Err() != nil || oneShot {
+			if ctx.Err() != nil {
 				break
 			}
 			nonCtxErr = err
+			if i == retries {
+				break
+			}
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():
