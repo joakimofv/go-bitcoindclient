@@ -4,6 +4,7 @@ go-bitcoindclient
 =================
 
 A client for connecting to bitcoind from Go code.
+Safe for concurrent use.
 All RPC methods are code-generated from the bitcoind help output.
 
 # Import

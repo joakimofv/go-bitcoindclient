@@ -63,6 +63,8 @@ type Config struct {
 
 // BitcoindClient is a client that provides methods for interacting with bitcoind.
 // Must be created with New and destroyed with Close.
+//
+// Clients are safe for concurrent use by multiple goroutines.
 type BitcoindClient struct {
 	closed int32 // Set atomically.
 	wg     sync.WaitGroup
@@ -78,7 +80,7 @@ type BitcoindClient struct {
 	zctx *zmq.Context
 	zsub *zmq.Socket
 	subs subscriptions
-	// zback is used like a channel to send messages to the zmqHandler goroutine.
+	// subs.zfront --> zback is used like a channel to send messages to the zmqHandler goroutine.
 	// Have to use zmq sockets in place of native channels for communication from
 	// other functions to the goroutine, since it is constantly waiting on the zsub socket,
 	// it can't select on a channel at the same time but can poll on multiple sockets.
@@ -159,7 +161,11 @@ func (bc *BitcoindClient) Close() (err error) {
 	if bc.zctx != nil {
 		bc.zctx.SetRetryAfterEINTR(false)
 		bc.subs.Lock()
-		bc.subs.zfront.SendMessage("term")
+		select {
+		case <-bc.subs.exited:
+		default:
+			bc.subs.zfront.SendMessage("term")
+		}
 		bc.subs.Unlock()
 		<-bc.subs.exited
 		err = bc.zctx.Term()
