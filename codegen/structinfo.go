@@ -283,6 +283,8 @@ func (s *structInfo) buildResultStruct(lf *LineFeeder) {
 	}
 
 	if len(basicTypes) == 0 && len(structs) == 1 && structs[0].ArrayLevel == 0 {
+		// Use the substruct as the main struct, but keep the name.
+		structs[0].TypeName = s.TypeName
 		*s = structs[0]
 		return
 	}

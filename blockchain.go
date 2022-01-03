@@ -1661,7 +1661,7 @@ type GetTxOutReq struct {
 	IncludeMempool *bool `json:"include_mempool,omitempty"`
 }
 
-// GetTxOutRespOtherwise holds the response to the GetTxOut call.
+// GetTxOutResp holds the response to the GetTxOut call.
 //
 // ALTERNATIVE (If the UTXO was not found)
 //  null    (json null)
@@ -1684,7 +1684,7 @@ type GetTxOutReq struct {
 //    },
 //    "coinbase" : true|false     (boolean) Coinbase or not
 //  }
-type GetTxOutRespOtherwise struct {
+type GetTxOutResp struct {
 	// The hash of the block at the tip of the chain
 	BestBlock string `json:"bestblock"`
 
@@ -1719,7 +1719,7 @@ type GetTxOutRespOtherwise struct {
 
 // GetTxOut RPC method.
 // Returns details about an unspent transaction output.
-func (bc *BitcoindClient) GetTxOut(ctx context.Context, args GetTxOutReq) (result GetTxOutRespOtherwise, err error) {
+func (bc *BitcoindClient) GetTxOut(ctx context.Context, args GetTxOutReq) (result GetTxOutResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "gettxout", args); err != nil {
 		return
