@@ -10,6 +10,18 @@
   fix: |-
     %[1]s// The transactions in the format of the getrawtransaction RPC. Different from verbosity = 1 "tx" result
     %[1]sGetRawTransactionRespIfVerboseIsSetToTrue
+- file: blockchain.go
+  todo: |-
+    (\t*)// TODO: Same output as verbosity = 2
+  fix: |-
+    %[1]s// Same output as verbosity = 2
+    %[1]sGetBlockRespForVerbosityEquals2
+- file: blockchain.go
+  todo: |-
+    (\t*)// TODO: The same output as verbosity = 2
+  fix: |-
+    %[1]s// The same output as verbosity = 2
+    %[1]sGetBlockRespForVerbosityEquals2Tx
 - file: rawtransactions.go
   todo: |-
     (\t*)Tx struct {
@@ -45,12 +57,10 @@
     %[1]s%[2]sGetAddressInfoResp
 - file: wallet.go
   todo: |-
-    (\t*)Decoded struct {
-    \t*// TODO: Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
-    \t*}
+    (\t*)// TODO: Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
   fix: |-
     %[1]s// Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
-    %[1]sDecoded DecodeRawTransactionResp
+    %[1]sDecodeRawTransactionResp
 - file: wallet.go
   todo: |
 

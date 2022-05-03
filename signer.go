@@ -8,17 +8,25 @@ import (
 )
 
 // EnumerateSignersResp holds the response to the EnumerateSigners call.
-//  {                  (json object)
-//    "signers" : [    (json array)
-//      "hex",         (string) Master key fingerprint
-//      "str",         (string) Device name
+//  {                               (json object)
+//    "signers" : [                 (json array)
+//      {                           (json object)
+//        "fingerprint" : "hex",    (string) Master key fingerprint
+//        "name" : "str"            (string) Device name
+//      },
 //      ...
 //    ]
 //  }
 type EnumerateSignersResp struct {
-	// Element: hex    Master key fingerprint
-	// Element: str    Device name
-	Signers []string `json:"signers"`
+	Signers []EnumerateSignersRespSigners `json:"signers"`
+}
+
+type EnumerateSignersRespSigners struct {
+	// Master key fingerprint
+	Fingerprint string `json:"fingerprint"`
+
+	// Device name
+	Name string `json:"name"`
 }
 
 // EnumerateSigners RPC method.

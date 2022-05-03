@@ -122,6 +122,8 @@ func TestSubscribe(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			blockSeqFloor := 0
+			txSeqFloor := 0
 			prevRound := time.Now()
 			for n := 0; n < tc.rounds; n++ {
 				if n != 0 {
@@ -143,18 +145,24 @@ func TestSubscribe(t *testing.T) {
 				var rpcBlockhashes []string
 
 				// Catch the block notifications.
+				newBlockSeqFloor := 0
 				for _, i := range rand.Perm(len(activeHashblockCh)) {
 					ch := hashblockCh[activeHashblockCh[i]]
 				RECV:
 					for {
 						select {
 						case hashMsg := <-ch:
-							if int(hashMsg.Seq) < len(rpcBlockhashes) {
-								if hex.EncodeToString(hashMsg.Hash[:]) != rpcBlockhashes[hashMsg.Seq] {
-									t.Errorf("[%d] expected %v, got %v", hashMsg.Seq, rpcBlockhashes[hashMsg.Seq], hex.EncodeToString(hashMsg.Hash[:]))
+							if int(hashMsg.Seq) <= blockSeqFloor {
+								// From previous round, ignore.
+								continue
+							}
+							if len(rpcBlockhashes) > 0 {
+								if hex.EncodeToString(hashMsg.Hash[:]) != rpcBlockhashes[hashMsg.Seq%nBlocks] {
+									t.Errorf("[%d] expected %v, got %v", hashMsg.Seq, rpcBlockhashes[hashMsg.Seq%nBlocks], hex.EncodeToString(hashMsg.Hash[:]))
 								}
 							}
 							if (hashMsg.Seq+1)%nBlocks == 0 {
+								newBlockSeqFloor = int(hashMsg.Seq)
 								break RECV
 							}
 						case rpcBlockhashes = <-blockHashesCh:
@@ -169,10 +177,15 @@ func TestSubscribe(t *testing.T) {
 					for {
 						select {
 						case rawMsg := <-ch:
+							if int(rawMsg.Seq) <= blockSeqFloor {
+								// From previous round, ignore.
+								continue
+							}
 							if len(rawMsg.Serialized) < 1 {
 								t.Error("empty")
 							}
 							if (rawMsg.Seq+1)%nBlocks == 0 {
+								newBlockSeqFloor = int(rawMsg.Seq)
 								break RECV2
 							}
 						case <-ctx.Done():
@@ -180,17 +193,30 @@ func TestSubscribe(t *testing.T) {
 						}
 					}
 				}
+				if newBlockSeqFloor > 0 {
+					blockSeqFloor = newBlockSeqFloor
+				} else if blockSeqFloor == 0 {
+					blockSeqFloor = nBlocks - 1
+				} else {
+					blockSeqFloor += nBlocks
+				}
 				// Catch the tx notifications.
+				newTxSeqFloor := 0
 				for _, i := range rand.Perm(len(activeHashtxCh)) {
 					ch := hashtxCh[activeHashtxCh[i]]
 				RECV3:
 					for {
 						select {
 						case hashMsg := <-ch:
+							if int(hashMsg.Seq) <= txSeqFloor {
+								// From previous round, ignore.
+								continue
+							}
 							if hashMsg.Hash == [32]byte{} {
 								t.Error("empty")
 							}
 							if hashMsg.Seq%nBlocks == 0 && hashMsg.Seq != 0 {
+								newTxSeqFloor = int(hashMsg.Seq)
 								break RECV3
 							}
 						case <-ctx.Done():
@@ -204,16 +230,26 @@ func TestSubscribe(t *testing.T) {
 					for {
 						select {
 						case rawMsg := <-ch:
+							if int(rawMsg.Seq) <= txSeqFloor {
+								// From previous round, ignore.
+								continue
+							}
 							if len(rawMsg.Serialized) < 1 {
 								t.Error("empty")
 							}
 							if rawMsg.Seq%nBlocks == 0 && rawMsg.Seq != 0 {
+								newTxSeqFloor = int(rawMsg.Seq)
 								break RECV4
 							}
 						case <-ctx.Done():
 							t.Fatal()
 						}
 					}
+				}
+				if newTxSeqFloor > 0 {
+					txSeqFloor = newTxSeqFloor
+				} else {
+					txSeqFloor += nBlocks
 				}
 				// Catch the sequence notifications.
 				for _, i := range rand.Perm(len(activeSequenceCh)) {

@@ -18,7 +18,7 @@ type AnalyzePsbtReq struct {
 
 // AnalyzePsbtResp holds the response to the AnalyzePsbt call.
 //  {                                   (json object)
-//    "inputs" : [                      (json array)
+//    "inputs" : [                      (json array, optional)
 //      {                               (json object)
 //        "has_utxo" : true|false,      (boolean) Whether a UTXO is provided
 //        "is_final" : true|false,      (boolean) Whether the input is finalized
@@ -45,7 +45,7 @@ type AnalyzePsbtReq struct {
 //    "error" : "str"                   (string, optional) Error message (if there is one)
 //  }
 type AnalyzePsbtResp struct {
-	Inputs []AnalyzePsbtRespInputs `json:"inputs"`
+	Inputs []AnalyzePsbtRespInputs `json:"inputs,omitempty"`
 
 	// Estimated vsize of the final signed transaction
 	EstimatedVSize *float64 `json:"estimated_vsize,omitempty"`
@@ -262,7 +262,7 @@ func (bc *BitcoindClient) ConvertToPsbt(ctx context.Context, args ConvertToPsbtR
 }
 
 // CreatePsbtReq holds the arguments for the CreatePsbt call.
-//  1. inputs                      (json array, required) The json objects
+//  1. inputs                      (json array, required) The inputs
 //       [
 //         {                       (json object)
 //           "txid": "hex",        (string, required) The transaction id
@@ -286,10 +286,10 @@ func (bc *BitcoindClient) ConvertToPsbt(ctx context.Context, args ConvertToPsbtR
 //         ...
 //       ]
 //  3. locktime                    (numeric, optional, default=0) Raw locktime. Non-0 value also locktime-activates inputs
-//  4. replaceable                 (boolean, optional, default=false) Marks this transaction as BIP125 replaceable.
+//  4. replaceable                 (boolean, optional, default=false) Marks this transaction as BIP125-replaceable.
 //                                 Allows this transaction to be replaced by a transaction with higher fees. If provided, it is an error if explicit sequence numbers are incompatible.
 type CreatePsbtReq struct {
-	// The json objects
+	// The inputs
 	Inputs []CreatePsbtReqInputs `json:"inputs"`
 
 	// The outputs (key-value pairs), where none of the keys are duplicated.
@@ -302,7 +302,7 @@ type CreatePsbtReq struct {
 	// Default: 0
 	LockTime float64 `json:"locktime,omitempty"`
 
-	// Marks this transaction as BIP125 replaceable.
+	// Marks this transaction as BIP125-replaceable.
 	// Allows this transaction to be replaced by a transaction with higher fees. If provided, it is an error if explicit sequence numbers are incompatible.
 	// Default: false
 	Replaceable bool `json:"replaceable,omitempty"`
@@ -323,6 +323,7 @@ type CreatePsbtReqInputs struct {
 // Holder of alternative parameter formats, only one will be used, the first that is non-zero.
 type CreatePsbtReqOutputs struct {
 	// A key-value pair. The key (string) is the bitcoin address, the value (float or string) is the amount in BTC
+	// Key: address, Value: amount
 	A map[string]float64
 
 	B struct {
@@ -453,6 +454,7 @@ type CreateRawTransactionReqInputs struct {
 // Holder of alternative parameter formats, only one will be used, the first that is non-zero.
 type CreateRawTransactionReqOutputs struct {
 	// A key-value pair. The key (string) is the bitcoin address, the value (float or string) is the amount in BTC
+	// Key: address, Value: amount
 	A map[string]float64
 
 	B struct {
@@ -536,6 +538,24 @@ type DecodePsbtReq struct {
 //    "tx" : {                                 (json object) The decoded network-serialized unsigned transaction.
 //      ...                                    The layout is the same as the output of decoderawtransaction.
 //    },
+//    "global_xpubs" : [                       (json array)
+//      {                                      (json object)
+//        "xpub" : "str",                      (string) The extended public key this path corresponds to
+//        "master_fingerprint" : "hex",        (string) The fingerprint of the master key
+//        "path" : "str"                       (string) The path
+//      },
+//      ...
+//    ],
+//    "psbt_version" : n,                      (numeric) The PSBT version number. Not to be confused with the unsigned transaction version
+//    "proprietary" : [                        (json array) The global proprietary map
+//      {                                      (json object)
+//        "identifier" : "hex",                (string) The hex string for the proprietary identifier
+//        "subtype" : n,                       (numeric) The number for the subtype
+//        "key" : "hex",                       (string) The hex for the key
+//        "value" : "hex"                      (string) The hex for the value
+//      },
+//      ...
+//    ],
 //    "unknown" : {                            (json object) The unknown global fields
 //      "key" : "hex",                         (string) (key-value pair) An unknown key-value pair
 //      ...
@@ -549,9 +569,10 @@ type DecodePsbtReq struct {
 //          "amount" : n,                      (numeric) The value in BTC
 //          "scriptPubKey" : {                 (json object)
 //            "asm" : "str",                   (string) The asm
+//            "desc" : "str",                  (string) Inferred descriptor for the output
 //            "hex" : "hex",                   (string) The hex
 //            "type" : "str",                  (string) The type, eg 'pubkeyhash'
-//            "address" : "str"                (string)  Bitcoin address if there is one
+//            "address" : "str"                (string, optional) The Bitcoin address (only if a well-defined address exists)
 //          }
 //        },
 //        "partial_signatures" : {             (json object, optional)
@@ -570,24 +591,50 @@ type DecodePsbtReq struct {
 //          "type" : "str"                     (string) The type, eg 'pubkeyhash'
 //        },
 //        "bip32_derivs" : [                   (json array, optional)
-//          {                                  (json object, optional) The public key with the derivation path as the value.
+//          {                                  (json object)
+//            "pubkey" : "str",                (string) The public key with the derivation path as the value.
 //            "master_fingerprint" : "str",    (string) The fingerprint of the master key
 //            "path" : "str"                   (string) The path
 //          },
 //          ...
 //        ],
-//        "final_scriptsig" : {                (json object, optional)
+//        "final_scriptSig" : {                (json object, optional)
 //          "asm" : "str",                     (string) The asm
 //          "hex" : "str"                      (string) The hex
 //        },
-//        "final_scriptwitness" : [            (json array)
+//        "final_scriptwitness" : [            (json array, optional)
 //          "hex",                             (string) hex-encoded witness data (if any)
 //          ...
 //        ],
-//        "unknown" : {                        (json object) The unknown global fields
+//        "ripemd160_preimages" : {            (json object, optional)
+//          "hash" : "str",                    (string) The hash and preimage that corresponds to it.
+//          ...
+//        },
+//        "sha256_preimages" : {               (json object, optional)
+//          "hash" : "str",                    (string) The hash and preimage that corresponds to it.
+//          ...
+//        },
+//        "hash160_preimages" : {              (json object, optional)
+//          "hash" : "str",                    (string) The hash and preimage that corresponds to it.
+//          ...
+//        },
+//        "hash256_preimages" : {              (json object, optional)
+//          "hash" : "str",                    (string) The hash and preimage that corresponds to it.
+//          ...
+//        },
+//        "unknown" : {                        (json object, optional) The unknown input fields
 //          "key" : "hex",                     (string) (key-value pair) An unknown key-value pair
 //          ...
-//        }
+//        },
+//        "proprietary" : [                    (json array, optional) The input proprietary map
+//          {                                  (json object)
+//            "identifier" : "hex",            (string) The hex string for the proprietary identifier
+//            "subtype" : n,                   (numeric) The number for the subtype
+//            "key" : "hex",                   (string) The hex for the key
+//            "value" : "hex"                  (string) The hex for the value
+//          },
+//          ...
+//        ]
 //      },
 //      ...
 //    ],
@@ -611,10 +658,19 @@ type DecodePsbtReq struct {
 //          },
 //          ...
 //        ],
-//        "unknown" : {                        (json object) The unknown global fields
+//        "unknown" : {                        (json object, optional) The unknown global fields
 //          "key" : "hex",                     (string) (key-value pair) An unknown key-value pair
 //          ...
-//        }
+//        },
+//        "proprietary" : [                    (json array, optional) The output proprietary map
+//          {                                  (json object)
+//            "identifier" : "hex",            (string) The hex string for the proprietary identifier
+//            "subtype" : n,                   (numeric) The number for the subtype
+//            "key" : "hex",                   (string) The hex for the key
+//            "value" : "hex"                  (string) The hex for the value
+//          },
+//          ...
+//        ]
 //      },
 //      ...
 //    ],
@@ -625,7 +681,17 @@ type DecodePsbtResp struct {
 	// The layout is the same as the output of decoderawtransaction.
 	Tx DecodeRawTransactionResp `json:"tx"`
 
+	GlobalXPubs []DecodePsbtRespGlobalXPubs `json:"global_xpubs"`
+
+	// The PSBT version number. Not to be confused with the unsigned transaction version
+	PsbtVersion float64 `json:"psbt_version"`
+
+	// The global proprietary map
+	Proprietary []DecodePsbtRespProprietary `json:"proprietary"`
+
 	// The unknown global fields
+	// (key-value pair) An unknown key-value pair
+	// Key: key, Value: hex
 	Unknown map[string]string `json:"unknown"`
 
 	Inputs []DecodePsbtRespInputs `json:"inputs"`
@@ -636,6 +702,31 @@ type DecodePsbtResp struct {
 	Fee *float64 `json:"fee,omitempty"`
 }
 
+type DecodePsbtRespGlobalXPubs struct {
+	// The extended public key this path corresponds to
+	XPub string `json:"xpub"`
+
+	// The fingerprint of the master key
+	MasterFingerprint string `json:"master_fingerprint"`
+
+	// The path
+	Path string `json:"path"`
+}
+
+type DecodePsbtRespProprietary struct {
+	// The hex string for the proprietary identifier
+	Identifier string `json:"identifier"`
+
+	// The number for the subtype
+	SubType float64 `json:"subtype"`
+
+	// The hex for the key
+	Key string `json:"key"`
+
+	// The hex for the value
+	Value string `json:"value"`
+}
+
 type DecodePsbtRespInputs struct {
 	// Decoded network transaction for non-witness UTXOs
 	NonWitnessUtxo *DecodePsbtRespInputsWitnessUtxo `json:"non_witness_utxo,omitempty"`
@@ -643,6 +734,8 @@ type DecodePsbtRespInputs struct {
 	// Transaction output for witness UTXOs
 	WitnessUtxo *DecodePsbtRespInputsWitnessUtxo `json:"witness_utxo,omitempty"`
 
+	// The public key and signature that corresponds to it.
+	// Key: pubkey, Value: str
 	PartialSignatures map[string]string `json:"partial_signatures,omitempty"`
 
 	// The sighash type to be used
@@ -654,13 +747,34 @@ type DecodePsbtRespInputs struct {
 
 	BIP32Derivs []DecodePsbtRespInputsBIP32Derivs `json:"bip32_derivs,omitempty"`
 
-	FinalScriptSig *DecodePsbtRespInputsFinalScriptSig `json:"final_scriptsig,omitempty"`
+	FinalScriptSig *DecodePsbtRespInputsFinalScriptSig `json:"final_scriptSig,omitempty"`
 
 	// Element: Hex    hex-encoded witness data (if any)
-	FinalScriptWitness []string `json:"final_scriptwitness"`
+	FinalScriptWitness []string `json:"final_scriptwitness,omitempty"`
 
-	// The unknown global fields
-	Unknown map[string]string `json:"unknown"`
+	// The hash and preimage that corresponds to it.
+	// Key: hash, Value: str
+	Ripemd160Preimages map[string]string `json:"ripemd160_preimages,omitempty"`
+
+	// The hash and preimage that corresponds to it.
+	// Key: hash, Value: str
+	Sha256Preimages map[string]string `json:"sha256_preimages,omitempty"`
+
+	// The hash and preimage that corresponds to it.
+	// Key: hash, Value: str
+	Hash160Preimages map[string]string `json:"hash160_preimages,omitempty"`
+
+	// The hash and preimage that corresponds to it.
+	// Key: hash, Value: str
+	Hash256Preimages map[string]string `json:"hash256_preimages,omitempty"`
+
+	// The unknown input fields
+	// (key-value pair) An unknown key-value pair
+	// Key: key, Value: hex
+	Unknown map[string]string `json:"unknown,omitempty"`
+
+	// The input proprietary map
+	Proprietary []DecodePsbtRespInputsProprietary `json:"proprietary,omitempty"`
 }
 
 type DecodePsbtRespInputsWitnessUtxo struct {
@@ -671,14 +785,17 @@ type DecodePsbtRespInputsWitnessUtxo struct {
 		// The asm
 		Asm string `json:"asm"`
 
+		// Inferred descriptor for the output
+		Desc string `json:"desc"`
+
 		// The hex
 		Hex string `json:"hex"`
 
 		// The type, eg 'pubkeyhash'
 		Type string `json:"type"`
 
-		// Bitcoin address if there is one
-		Address string `json:"address"`
+		// The Bitcoin address (only if a well-defined address exists)
+		Address string `json:"address,omitempty"`
 	} `json:"scriptPubKey"`
 }
 
@@ -704,8 +821,10 @@ type DecodePsbtRespInputsWitnessScript struct {
 	Type string `json:"type"`
 }
 
-// The public key with the derivation path as the value.
 type DecodePsbtRespInputsBIP32Derivs struct {
+	// The public key with the derivation path as the value.
+	Pubkey string `json:"pubkey"`
+
 	// The fingerprint of the master key
 	MasterFingerprint string `json:"master_fingerprint"`
 
@@ -721,6 +840,20 @@ type DecodePsbtRespInputsFinalScriptSig struct {
 	Hex string `json:"hex"`
 }
 
+type DecodePsbtRespInputsProprietary struct {
+	// The hex string for the proprietary identifier
+	Identifier string `json:"identifier"`
+
+	// The number for the subtype
+	SubType float64 `json:"subtype"`
+
+	// The hex for the key
+	Key string `json:"key"`
+
+	// The hex for the value
+	Value string `json:"value"`
+}
+
 type DecodePsbtRespOutputs struct {
 	RedeemScript *DecodePsbtRespOutputsRedeemScript `json:"redeem_script,omitempty"`
 
@@ -729,7 +862,12 @@ type DecodePsbtRespOutputs struct {
 	BIP32Derivs []DecodePsbtRespOutputsBIP32Derivs `json:"bip32_derivs,omitempty"`
 
 	// The unknown global fields
-	Unknown map[string]string `json:"unknown"`
+	// (key-value pair) An unknown key-value pair
+	// Key: key, Value: hex
+	Unknown map[string]string `json:"unknown,omitempty"`
+
+	// The output proprietary map
+	Proprietary []DecodePsbtRespOutputsProprietary `json:"proprietary,omitempty"`
 }
 
 type DecodePsbtRespOutputsRedeemScript struct {
@@ -763,6 +901,20 @@ type DecodePsbtRespOutputsBIP32Derivs struct {
 
 	// The path
 	Path string `json:"path"`
+}
+
+type DecodePsbtRespOutputsProprietary struct {
+	// The hex string for the proprietary identifier
+	Identifier string `json:"identifier"`
+
+	// The number for the subtype
+	SubType float64 `json:"subtype"`
+
+	// The hex for the key
+	Key string `json:"key"`
+
+	// The hex for the value
+	Value string `json:"value"`
 }
 
 // DecodePsbt RPC method.
@@ -809,13 +961,14 @@ type DecodeRawTransactionReq struct {
 //    "locktime" : xxx,           (numeric) The lock time
 //    "vin" : [                   (json array)
 //      {                         (json object)
-//        "txid" : "hex",         (string) The transaction id
-//        "vout" : n,             (numeric) The output number
-//        "scriptSig" : {         (json object) The script
+//        "coinbase" : "hex",     (string, optional)
+//        "txid" : "hex",         (string, optional) The transaction id
+//        "vout" : n,             (numeric, optional) The output number
+//        "scriptSig" : {         (json object, optional) The script
 //          "asm" : "str",        (string) asm
 //          "hex" : "hex"         (string) hex
 //        },
-//        "txinwitness" : [       (json array)
+//        "txinwitness" : [       (json array, optional)
 //          "hex",                (string) hex-encoded witness data (if any)
 //          ...
 //        ],
@@ -829,14 +982,10 @@ type DecodeRawTransactionReq struct {
 //        "n" : n,                (numeric) index
 //        "scriptPubKey" : {      (json object)
 //          "asm" : "str",        (string) the asm
+//          "desc" : "str",       (string) Inferred descriptor for the output
 //          "hex" : "hex",        (string) the hex
-//          "reqSigs" : n,        (numeric, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
 //          "type" : "str",       (string) The type, eg 'pubkeyhash'
-//          "address" : "str",    (string, optional) bitcoin address (only if a well-defined address exists)
-//          "addresses" : [       (json array, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-//            "str",              (string) bitcoin address
-//            ...
-//          ]
+//          "address" : "str"     (string, optional) The Bitcoin address (only if a well-defined address exists)
 //        }
 //      },
 //      ...
@@ -870,26 +1019,30 @@ type DecodeRawTransactionResp struct {
 }
 
 type DecodeRawTransactionRespVin struct {
+	Coinbase string `json:"coinbase,omitempty"`
+
 	// The transaction id
-	TxID string `json:"txid"`
+	TxID string `json:"txid,omitempty"`
 
 	// The output number
-	Vout float64 `json:"vout"`
+	Vout *float64 `json:"vout,omitempty"`
 
 	// The script
-	ScriptSig struct {
-		// asm
-		Asm string `json:"asm"`
-
-		// hex
-		Hex string `json:"hex"`
-	} `json:"scriptSig"`
+	ScriptSig *DecodeRawTransactionRespVinScriptSig `json:"scriptSig,omitempty"`
 
 	// Element: Hex    hex-encoded witness data (if any)
-	TxInWitness []string `json:"txinwitness"`
+	TxInWitness []string `json:"txinwitness,omitempty"`
 
 	// The script sequence number
 	Sequence float64 `json:"sequence"`
+}
+
+type DecodeRawTransactionRespVinScriptSig struct {
+	// asm
+	Asm string `json:"asm"`
+
+	// hex
+	Hex string `json:"hex"`
 }
 
 type DecodeRawTransactionRespVout struct {
@@ -903,21 +1056,17 @@ type DecodeRawTransactionRespVout struct {
 		// the asm
 		Asm string `json:"asm"`
 
+		// Inferred descriptor for the output
+		Desc string `json:"desc"`
+
 		// the hex
 		Hex string `json:"hex"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-		ReqSigs *float64 `json:"reqSigs,omitempty"`
 
 		// The type, eg 'pubkeyhash'
 		Type string `json:"type"`
 
-		// bitcoin address (only if a well-defined address exists)
+		// The Bitcoin address (only if a well-defined address exists)
 		Address string `json:"address,omitempty"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-		// Element: Str    bitcoin address
-		Addresses []string `json:"addresses,omitempty"`
 	} `json:"scriptPubKey"`
 }
 
@@ -942,24 +1091,16 @@ type DecodeScriptReq struct {
 // DecodeScriptResp holds the response to the DecodeScript call.
 //  {                             (json object)
 //    "asm" : "str",              (string) Script public key
+//    "desc" : "str",             (string) Inferred descriptor for the script
 //    "type" : "str",             (string) The output type (e.g. nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata, witness_v0_scripthash, witness_v0_keyhash, witness_v1_taproot, witness_unknown)
-//    "address" : "str",          (string, optional) bitcoin address (only if a well-defined address exists)
-//    "reqSigs" : n,              (numeric, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-//    "addresses" : [             (json array, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-//      "str",                    (string) bitcoin address
-//      ...
-//    ],
-//    "p2sh" : "str",             (string) address of P2SH script wrapping this redeem script (not returned if the script is already a P2SH)
-//    "segwit" : {                (json object) Result of a witness script public key wrapping this redeem script (not returned if the script is a P2SH or witness)
+//    "address" : "str",          (string, optional) The Bitcoin address (only if a well-defined address exists)
+//    "p2sh" : "str",             (string, optional) address of P2SH script wrapping this redeem script (not returned for types that should not be wrapped)
+//    "segwit" : {                (json object, optional) Result of a witness script public key wrapping this redeem script (not returned for types that should not be wrapped)
 //      "asm" : "str",            (string) String representation of the script public key
 //      "hex" : "hex",            (string) Hex string of the script public key
 //      "type" : "str",           (string) The type of the script public key (e.g. witness_v0_keyhash or witness_v0_scripthash)
-//      "address" : "str",        (string, optional) bitcoin address (only if a well-defined address exists)
-//      "reqSigs" : n,            (numeric, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-//      "addresses" : [           (json array, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-//        "str",                  (string) segwit address
-//        ...
-//      ],
+//      "address" : "str",        (string, optional) The Bitcoin address (only if a well-defined address exists)
+//      "desc" : "str",           (string) Inferred descriptor for the script
 //      "p2sh-segwit" : "str"     (string) address of the P2SH script wrapping this witness redeem script
 //    }
 //  }
@@ -967,46 +1108,40 @@ type DecodeScriptResp struct {
 	// Script public key
 	Asm string `json:"asm"`
 
+	// Inferred descriptor for the script
+	Desc string `json:"desc"`
+
 	// The output type (e.g. nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata, witness_v0_scripthash, witness_v0_keyhash, witness_v1_taproot, witness_unknown)
 	Type string `json:"type"`
 
-	// bitcoin address (only if a well-defined address exists)
+	// The Bitcoin address (only if a well-defined address exists)
 	Address string `json:"address,omitempty"`
 
-	// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-	ReqSigs *float64 `json:"reqSigs,omitempty"`
+	// address of P2SH script wrapping this redeem script (not returned for types that should not be wrapped)
+	P2SH string `json:"p2sh,omitempty"`
 
-	// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-	// Element: Str    bitcoin address
-	Addresses []string `json:"addresses,omitempty"`
+	// Result of a witness script public key wrapping this redeem script (not returned for types that should not be wrapped)
+	Segwit *DecodeScriptRespSegwit `json:"segwit,omitempty"`
+}
 
-	// address of P2SH script wrapping this redeem script (not returned if the script is already a P2SH)
-	P2SH string `json:"p2sh"`
+type DecodeScriptRespSegwit struct {
+	// String representation of the script public key
+	Asm string `json:"asm"`
 
-	// Result of a witness script public key wrapping this redeem script (not returned if the script is a P2SH or witness)
-	Segwit struct {
-		// String representation of the script public key
-		Asm string `json:"asm"`
+	// Hex string of the script public key
+	Hex string `json:"hex"`
 
-		// Hex string of the script public key
-		Hex string `json:"hex"`
+	// The type of the script public key (e.g. witness_v0_keyhash or witness_v0_scripthash)
+	Type string `json:"type"`
 
-		// The type of the script public key (e.g. witness_v0_keyhash or witness_v0_scripthash)
-		Type string `json:"type"`
+	// The Bitcoin address (only if a well-defined address exists)
+	Address string `json:"address,omitempty"`
 
-		// bitcoin address (only if a well-defined address exists)
-		Address string `json:"address,omitempty"`
+	// Inferred descriptor for the script
+	Desc string `json:"desc"`
 
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-		ReqSigs *float64 `json:"reqSigs,omitempty"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-		// Element: Str    segwit address
-		Addresses []string `json:"addresses,omitempty"`
-
-		// address of the P2SH script wrapping this witness redeem script
-		P2SHSegwit string `json:"p2sh-segwit"`
-	} `json:"segwit"`
+	// address of the P2SH script wrapping this witness redeem script
+	P2SHSegwit string `json:"p2sh-segwit"`
 }
 
 // DecodeScript RPC method.
@@ -1036,16 +1171,16 @@ type FinalizePsbtReq struct {
 
 // FinalizePsbtResp holds the response to the FinalizePsbt call.
 //  {                             (json object)
-//    "psbt" : "str",             (string) The base64-encoded partially signed transaction if not extracted
-//    "hex" : "hex",              (string) The hex-encoded network transaction if extracted
+//    "psbt" : "str",             (string, optional) The base64-encoded partially signed transaction if not extracted
+//    "hex" : "hex",              (string, optional) The hex-encoded network transaction if extracted
 //    "complete" : true|false     (boolean) If the transaction has a complete set of signatures
 //  }
 type FinalizePsbtResp struct {
 	// The base64-encoded partially signed transaction if not extracted
-	Psbt string `json:"psbt"`
+	Psbt string `json:"psbt,omitempty"`
 
 	// The hex-encoded network transaction if extracted
-	Hex string `json:"hex"`
+	Hex string `json:"hex,omitempty"`
 
 	// If the transaction has a complete set of signatures
 	Complete bool `json:"complete"`
@@ -1089,13 +1224,34 @@ func (bc *BitcoindClient) FinalizePsbt(ctx context.Context, args FinalizePsbtReq
 //           vout_index,                  (numeric) The zero-based output index, before a change output is added.
 //           ...
 //         ],
-//         "replaceable": bool,           (boolean, optional, default=wallet default) Marks this transaction as BIP125 replaceable.
-//                                        Allows this transaction to be replaced by a transaction with higher fees
+//         "input_weights": [             (json array, optional) Inputs and their corresponding weights
+//           "txid",                      (string, required) The transaction id
+//           vout,                        (numeric, required) The output index
+//           weight,                      (numeric, required) The maximum weight for this input, including the weight of the outpoint and sequence number. Note that serialized signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
+//           ...
+//         ],
 //         "conf_target": n,              (numeric, optional, default=wallet -txconfirmtarget) Confirmation target in blocks
 //         "estimate_mode": "str",        (string, optional, default="unset") The fee estimate mode, must be one of (case insensitive):
 //                                        "unset"
 //                                        "economical"
 //                                        "conservative"
+//         "replaceable": bool,           (boolean, optional, default=wallet default) Marks this transaction as BIP125-replaceable.
+//                                        Allows this transaction to be replaced by a transaction with higher fees
+//         "solving_data": {              (json object, optional) Keys and scripts needed for producing a final transaction with a dummy signature.
+//                                        Used for fee estimation during coin selection.
+//           "pubkeys": [                 (json array, optional, default=[]) Public keys involved in this transaction.
+//             "pubkey",                  (string) A public key
+//             ...
+//           ],
+//           "scripts": [                 (json array, optional, default=[]) Scripts involved in this transaction.
+//             "script",                  (string) A script
+//             ...
+//           ],
+//           "descriptors": [             (json array, optional, default=[]) Descriptors that provide solving data for this transaction.
+//             "descriptor",              (string) A descriptor
+//             ...
+//           ],
+//         },
 //       }
 //  3. iswitness                          (boolean, optional, default=depends on heuristic tests) Whether the transaction hex is a serialized witness transaction.
 //                                        If iswitness is not present, heuristic tests will be used in decoding.
@@ -1168,10 +1324,8 @@ type FundRawTransactionReqOptions struct {
 	// Element: VoutIndex    The zero-based output index, before a change output is added.
 	SubtractFeeFromOutputs []float64 `json:"subtractFeeFromOutputs,omitempty"`
 
-	// Marks this transaction as BIP125 replaceable.
-	// Allows this transaction to be replaced by a transaction with higher fees
-	// Default: wallet default
-	Replaceable *bool `json:"replaceable,omitempty"`
+	// Inputs and their corresponding weights
+	InputWeights []FundRawTransactionReqOptionsInputWeights `json:"input_weights,omitempty"`
 
 	// Confirmation target in blocks
 	// Default: wallet -txconfirmtarget
@@ -1183,6 +1337,75 @@ type FundRawTransactionReqOptions struct {
 	// "conservative"
 	// Default: "unset"
 	EstimateMode string `json:"estimate_mode,omitempty"`
+
+	// Marks this transaction as BIP125-replaceable.
+	// Allows this transaction to be replaced by a transaction with higher fees
+	// Default: wallet default
+	Replaceable *bool `json:"replaceable,omitempty"`
+
+	// Keys and scripts needed for producing a final transaction with a dummy signature.
+	// Used for fee estimation during coin selection.
+	SolvingData *FundRawTransactionReqOptionsSolvingData `json:"solving_data,omitempty"`
+}
+
+// Holder of alternative parameter formats, only one will be used, the first that is non-zero.
+type FundRawTransactionReqOptionsInputWeights struct {
+	// The transaction id
+	TxID string
+
+	// The output index
+	Vout float64
+
+	// The maximum weight for this input, including the weight of the outpoint and sequence number. Note that serialized signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
+	Weight float64
+}
+
+func (alts FundRawTransactionReqOptionsInputWeights) MarshalJSON() ([]byte, error) {
+	if !reflect.ValueOf(alts.TxID).IsZero() {
+		return json.Marshal(alts.TxID)
+	}
+	if !reflect.ValueOf(alts.Vout).IsZero() {
+		return json.Marshal(alts.Vout)
+	}
+	return json.Marshal(alts.Weight)
+}
+
+func (alts *FundRawTransactionReqOptionsInputWeights) UnmarshalJSON(b []byte) error {
+	reset := *alts
+	var decoder *json.Decoder
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.TxID) == nil {
+		return nil
+	}
+	alts.TxID = reset.TxID
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.Vout) == nil {
+		return nil
+	}
+	alts.Vout = reset.Vout
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.Weight) == nil {
+		return nil
+	}
+	alts.Weight = reset.Weight
+	return &UnmarshalError{B: b, structName: "FundRawTransactionReqOptionsInputWeights"}
+}
+
+type FundRawTransactionReqOptionsSolvingData struct {
+	// Public keys involved in this transaction.
+	// Element: Pubkey    A public key
+	Pubkeys []string `json:"pubkeys,omitempty"`
+
+	// Scripts involved in this transaction.
+	// Element: Script    A script
+	Scripts []string `json:"scripts,omitempty"`
+
+	// Descriptors that provide solving data for this transaction.
+	// Element: Descriptor    A descriptor
+	Descriptors []string `json:"descriptors,omitempty"`
 }
 
 // FundRawTransactionResp holds the response to the FundRawTransaction call.
@@ -1208,8 +1431,9 @@ type FundRawTransactionResp struct {
 // No existing outputs will be modified unless "subtractFeeFromOutputs" is specified.
 // Note that inputs which were signed may need to be resigned after completion since in/outputs have been added.
 // The inputs added will not be signed, use signrawtransactionwithkey
-//  or signrawtransactionwithwallet for that.
-// Note that all existing inputs must have their previous output transaction be in the wallet.
+// or signrawtransactionwithwallet for that.
+// All existing inputs must either have their previous output transaction be in the wallet
+// or be in the UTXO set. Solving data must be provided for non-wallet inputs.
 // Note that all inputs selected must be of standard form and P2SH scripts must be
 // in the wallet using importaddress or addmultisigaddress (to calculate fees).
 // You can see whether this is the case by checking the "solvable" field in the listunspent output.
@@ -1246,7 +1470,7 @@ type GetRawTransactionReq struct {
 //
 // ALTERNATIVE (if verbose is set to true)
 //  {                                    (json object)
-//    "in_active_chain" : true|false,    (boolean) Whether specified block is in the active chain or not (only present with explicit "blockhash" argument)
+//    "in_active_chain" : true|false,    (boolean, optional) Whether specified block is in the active chain or not (only present with explicit "blockhash" argument)
 //    "hex" : "hex",                     (string) The serialized, hex-encoded data for 'txid'
 //    "txid" : "hex",                    (string) The transaction id (same as provided)
 //    "hash" : "hex",                    (string) The transaction hash (differs from txid for witness transactions)
@@ -1264,7 +1488,7 @@ type GetRawTransactionReq struct {
 //          "hex" : "hex"                (string) hex
 //        },
 //        "sequence" : n,                (numeric) The script sequence number
-//        "txinwitness" : [              (json array)
+//        "txinwitness" : [              (json array, optional)
 //          "hex",                       (string) hex-encoded witness data (if any)
 //          ...
 //        ]
@@ -1277,22 +1501,18 @@ type GetRawTransactionReq struct {
 //        "n" : n,                       (numeric) index
 //        "scriptPubKey" : {             (json object)
 //          "asm" : "str",               (string) the asm
+//          "desc" : "str",              (string) Inferred descriptor for the output
 //          "hex" : "str",               (string) the hex
-//          "reqSigs" : n,               (numeric, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
 //          "type" : "str",              (string) The type, eg 'pubkeyhash'
-//          "address" : "str",           (string, optional) bitcoin address (only if a well-defined address exists)
-//          "addresses" : [              (json array, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-//            "str",                     (string) bitcoin address
-//            ...
-//          ]
+//          "address" : "str"            (string, optional) The Bitcoin address (only if a well-defined address exists)
 //        }
 //      },
 //      ...
 //    ],
-//    "blockhash" : "hex",               (string) the block hash
-//    "confirmations" : n,               (numeric) The confirmations
-//    "blocktime" : xxx,                 (numeric) The block time expressed in UNIX epoch time
-//    "time" : n                         (numeric) Same as "blocktime"
+//    "blockhash" : "hex",               (string, optional) the block hash
+//    "confirmations" : n,               (numeric, optional) The confirmations
+//    "blocktime" : xxx,                 (numeric, optional) The block time expressed in UNIX epoch time
+//    "time" : n                         (numeric, optional) Same as "blocktime"
 //  }
 type GetRawTransactionResp struct {
 	// The serialized, hex-encoded data for 'txid'
@@ -1328,7 +1548,7 @@ func (alts *GetRawTransactionResp) UnmarshalJSON(b []byte) error {
 
 type GetRawTransactionRespIfVerboseIsSetToTrue struct {
 	// Whether specified block is in the active chain or not (only present with explicit "blockhash" argument)
-	InActiveChain bool `json:"in_active_chain"`
+	InActiveChain *bool `json:"in_active_chain,omitempty"`
 
 	// The serialized, hex-encoded data for 'txid'
 	Hex string `json:"hex"`
@@ -1359,16 +1579,16 @@ type GetRawTransactionRespIfVerboseIsSetToTrue struct {
 	Vout []GetRawTransactionRespIfVerboseIsSetToTrueVout `json:"vout"`
 
 	// the block hash
-	Blockhash string `json:"blockhash"`
+	Blockhash string `json:"blockhash,omitempty"`
 
 	// The confirmations
-	Confirmations float64 `json:"confirmations"`
+	Confirmations *float64 `json:"confirmations,omitempty"`
 
 	// The block time expressed in UNIX epoch time
-	BlockTime float64 `json:"blocktime"`
+	BlockTime *float64 `json:"blocktime,omitempty"`
 
 	// Same as "blocktime"
-	Time float64 `json:"time"`
+	Time *float64 `json:"time,omitempty"`
 }
 
 type GetRawTransactionRespIfVerboseIsSetToTrueVin struct {
@@ -1391,7 +1611,7 @@ type GetRawTransactionRespIfVerboseIsSetToTrueVin struct {
 	Sequence float64 `json:"sequence"`
 
 	// Element: Hex    hex-encoded witness data (if any)
-	TxInWitness []string `json:"txinwitness"`
+	TxInWitness []string `json:"txinwitness,omitempty"`
 }
 
 type GetRawTransactionRespIfVerboseIsSetToTrueVout struct {
@@ -1405,31 +1625,26 @@ type GetRawTransactionRespIfVerboseIsSetToTrueVout struct {
 		// the asm
 		Asm string `json:"asm"`
 
+		// Inferred descriptor for the output
+		Desc string `json:"desc"`
+
 		// the hex
 		Hex string `json:"hex"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-		ReqSigs *float64 `json:"reqSigs,omitempty"`
 
 		// The type, eg 'pubkeyhash'
 		Type string `json:"type"`
 
-		// bitcoin address (only if a well-defined address exists)
+		// The Bitcoin address (only if a well-defined address exists)
 		Address string `json:"address,omitempty"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-		// Element: Str    bitcoin address
-		Addresses []string `json:"addresses,omitempty"`
 	} `json:"scriptPubKey"`
 }
 
 // GetRawTransaction RPC method.
 // Return the raw transaction data.
-// By default this function only works for mempool transactions. When called with a blockhash
-// argument, getrawtransaction will return the transaction if the specified block is available and
-// the transaction is found in that block. When called without a blockhash argument, getrawtransaction
-// will return the transaction if it is in the mempool, or if -txindex is enabled and the transaction
-// is in a block in the blockchain.
+// By default, this call only returns a transaction if it is in the mempool. If -txindex is enabled
+// and no blockhash argument is passed, it will return the transaction if it is in the mempool or any block.
+// If a blockhash argument is passed, it will return the transaction if
+// the specified block is available and the transaction is in that block.
 // Hint: Use gettransaction for wallet transactions.
 // If verbose is 'true', returns an Object with information about 'txid'.
 // If verbose is 'false' or omitted, returns a string that is serialized, hex-encoded data for 'txid'.
@@ -1561,7 +1776,7 @@ func (bc *BitcoindClient) SendRawTransaction(ctx context.Context, args SendRawTr
 //         },
 //         ...
 //       ]
-//  4. sighashtype                      (string, optional, default="DEFAULT") The signature hash type. Must be one of:
+//  4. sighashtype                      (string, optional, default="DEFAULT for Taproot, ALL otherwise") The signature hash type. Must be one of:
 //                                      "DEFAULT"
 //                                      "ALL"
 //                                      "NONE"
@@ -1588,7 +1803,7 @@ type SignRawTransactionWithKeyReq struct {
 	// "ALL|ANYONECANPAY"
 	// "NONE|ANYONECANPAY"
 	// "SINGLE|ANYONECANPAY"
-	// Default: "DEFAULT"
+	// Default: "DEFAULT for Taproot, ALL otherwise"
 	SigHashType string `json:"sighashtype,omitempty"`
 }
 
@@ -1620,6 +1835,10 @@ type SignRawTransactionWithKeyReqPrevTxs struct {
 //      {                         (json object)
 //        "txid" : "hex",         (string) The hash of the referenced, previous transaction
 //        "vout" : n,             (numeric) The index of the output to spent and used as input
+//        "witness" : [           (json array)
+//          "hex",                (string)
+//          ...
+//        ],
 //        "scriptSig" : "hex",    (string) The hex-encoded signature script
 //        "sequence" : n,         (numeric) Script sequence number
 //        "error" : "str"         (string) Verification or signing error related to the input
@@ -1644,6 +1863,9 @@ type SignRawTransactionWithKeyRespErrors struct {
 
 	// The index of the output to spent and used as input
 	Vout float64 `json:"vout"`
+
+	// Element: Hex
+	Witness []string `json:"witness"`
 
 	// The hex-encoded signature script
 	ScriptSig string `json:"scriptSig"`
@@ -1690,24 +1912,24 @@ type TestMempoolAcceptReq struct {
 // TestMempoolAcceptResp holds the response to the TestMempoolAccept call.
 //  [                               (json array) The result of the mempool acceptance test for each raw transaction in the input array.
 //                                  Returns results for each transaction in the same order they were passed in.
-//                                  It is possible for transactions to not be fully validated ('allowed' unset) if another transaction failed.
+//                                  Transactions that cannot be fully validated due to failures in other transactions will not contain an 'allowed' result.
 //    {                             (json object)
 //      "txid" : "hex",             (string) The transaction hash in hex
 //      "wtxid" : "hex",            (string) The transaction witness hash in hex
-//      "package-error" : "str",    (string) Package validation error, if any (only possible if rawtxs had more than 1 transaction).
-//      "allowed" : true|false,     (boolean) Whether this tx would be accepted to the mempool and pass client-specified maxfeerate.If not present, the tx was not fully validated due to a failure in another tx in the list.
-//      "vsize" : n,                (numeric) Virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted (only present when 'allowed' is true)
-//      "fees" : {                  (json object) Transaction fees (only present if 'allowed' is true)
+//      "package-error" : "str",    (string, optional) Package validation error, if any (only possible if rawtxs had more than 1 transaction).
+//      "allowed" : true|false,     (boolean, optional) Whether this tx would be accepted to the mempool and pass client-specified maxfeerate. If not present, the tx was not fully validated due to a failure in another tx in the list.
+//      "vsize" : n,                (numeric, optional) Virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted (only present when 'allowed' is true)
+//      "fees" : {                  (json object, optional) Transaction fees (only present if 'allowed' is true)
 //        "base" : n                (numeric) transaction fee in BTC
 //      },
-//      "reject-reason" : "str"     (string) Rejection string (only present when 'allowed' is false)
+//      "reject-reason" : "str"     (string, optional) Rejection string (only present when 'allowed' is false)
 //    },
 //    ...
 //  ]
 type TestMempoolAcceptResp struct {
 	// The result of the mempool acceptance test for each raw transaction in the input array.
 	// Returns results for each transaction in the same order they were passed in.
-	// It is possible for transactions to not be fully validated ('allowed' unset) if another transaction failed.
+	// Transactions that cannot be fully validated due to failures in other transactions will not contain an 'allowed' result.
 	Array []TestMempoolAcceptRespElement
 }
 
@@ -1727,9 +1949,6 @@ func (alts *TestMempoolAcceptResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "TestMempoolAcceptResp"}
 }
 
-// The result of the mempool acceptance test for each raw transaction in the input array.
-// Returns results for each transaction in the same order they were passed in.
-// It is possible for transactions to not be fully validated ('allowed' unset) if another transaction failed.
 type TestMempoolAcceptRespElement struct {
 	// The transaction hash in hex
 	TxID string `json:"txid"`
@@ -1738,22 +1957,24 @@ type TestMempoolAcceptRespElement struct {
 	WTxID string `json:"wtxid"`
 
 	// Package validation error, if any (only possible if rawtxs had more than 1 transaction).
-	PackageError string `json:"package-error"`
+	PackageError string `json:"package-error,omitempty"`
 
-	// Whether this tx would be accepted to the mempool and pass client-specified maxfeerate.If not present, the tx was not fully validated due to a failure in another tx in the list.
-	Allowed bool `json:"allowed"`
+	// Whether this tx would be accepted to the mempool and pass client-specified maxfeerate. If not present, the tx was not fully validated due to a failure in another tx in the list.
+	Allowed *bool `json:"allowed,omitempty"`
 
 	// Virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted (only present when 'allowed' is true)
-	VSize float64 `json:"vsize"`
+	VSize *float64 `json:"vsize,omitempty"`
 
 	// Transaction fees (only present if 'allowed' is true)
-	Fees struct {
-		// transaction fee in BTC
-		Base float64 `json:"base"`
-	} `json:"fees"`
+	Fees *TestMempoolAcceptRespElementFees `json:"fees,omitempty"`
 
 	// Rejection string (only present when 'allowed' is false)
-	RejectReason string `json:"reject-reason"`
+	RejectReason string `json:"reject-reason,omitempty"`
+}
+
+type TestMempoolAcceptRespElementFees struct {
+	// transaction fee in BTC
+	Base float64 `json:"base"`
 }
 
 // TestMempoolAccept RPC method.

@@ -91,7 +91,11 @@ type AddMultisigAddressReq struct {
 //  {                            (json object)
 //    "address" : "str",         (string) The value of the new multisig address
 //    "redeemScript" : "hex",    (string) The string value of the hex-encoded redemption script
-//    "descriptor" : "str"       (string) The descriptor for this multisig
+//    "descriptor" : "str",      (string) The descriptor for this multisig
+//    "warnings" : [             (json array, optional) Any warnings resulting from the creation of this multisig
+//      "str",                   (string)
+//      ...
+//    ]
 //  }
 type AddMultisigAddressResp struct {
 	// The value of the new multisig address
@@ -102,6 +106,10 @@ type AddMultisigAddressResp struct {
 
 	// The descriptor for this multisig
 	Descriptor string `json:"descriptor"`
+
+	// Any warnings resulting from the creation of this multisig
+	// Element: Str
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // AddMultisigAddress RPC method.
@@ -204,7 +212,7 @@ func (bc *BitcoindClient) BumpFee(ctx context.Context, args BumpFeeReq) (result 
 //  3. blank                   (boolean, optional, default=false) Create a blank wallet. A blank wallet has no keys or HD seed. One can be set using sethdseed.
 //  4. passphrase              (string, optional) Encrypt the wallet with this passphrase.
 //  5. avoid_reuse             (boolean, optional, default=false) Keep track of coin reuse, and treat dirty and clean coins differently with privacy considerations in mind.
-//  6. descriptors             (boolean, optional, default=false) Create a native descriptor wallet. The wallet will use descriptors internally to handle address creation
+//  6. descriptors             (boolean, optional, default=true) Create a native descriptor wallet. The wallet will use descriptors internally to handle address creation
 //  7. load_on_startup         (boolean, optional) Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged.
 //  8. external_signer         (boolean, optional, default=false) Use an external signer such as a hardware wallet. Requires -signer to be configured. Wallet creation will fail if keys cannot be fetched. Requires disable_private_keys and descriptors set to true.
 type CreateWalletReq struct {
@@ -227,8 +235,8 @@ type CreateWalletReq struct {
 	AvoidReuse bool `json:"avoid_reuse,omitempty"`
 
 	// Create a native descriptor wallet. The wallet will use descriptors internally to handle address creation
-	// Default: false
-	Descriptors bool `json:"descriptors,omitempty"`
+	// Default: true
+	Descriptors *bool `json:"descriptors,omitempty"`
 
 	// Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged.
 	LoadOnStartup *bool `json:"load_on_startup,omitempty"`
@@ -386,10 +394,49 @@ type GetAddressesByLabelReq struct {
 	Label string `json:"label"`
 }
 
+// GetAddressesByLabelResp holds the response to the GetAddressesByLabel call.
+//  {                         (json object) json object with addresses as keys
+//    "address" : {           (json object) json object with information about address
+//      "purpose" : "str"     (string) Purpose of address ("send" for sending address, "receive" for receiving address)
+//    },
+//    ...
+//  }
+type GetAddressesByLabelResp struct {
+	// json object with addresses as keys
+	// json object with information about address
+	// Key: address, Value: struct
+	Map map[string]GetAddressesByLabelRespElement
+}
+
+func (alts GetAddressesByLabelResp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(alts.Map)
+}
+
+func (alts *GetAddressesByLabelResp) UnmarshalJSON(b []byte) error {
+	reset := *alts
+	var decoder *json.Decoder
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.Map) == nil {
+		return nil
+	}
+	alts.Map = reset.Map
+	return &UnmarshalError{B: b, structName: "GetAddressesByLabelResp"}
+}
+
+type GetAddressesByLabelRespElement struct {
+	// Purpose of address ("send" for sending address, "receive" for receiving address)
+	Purpose string `json:"purpose"`
+}
+
 // GetAddressesByLabel RPC method.
 // Returns the list of addresses assigned the specified label.
-func (bc *BitcoindClient) GetAddressesByLabel(ctx context.Context, args GetAddressesByLabelReq) (err error) {
-	_, err = bc.sendRequest(ctx, "getaddressesbylabel", args)
+func (bc *BitcoindClient) GetAddressesByLabel(ctx context.Context, args GetAddressesByLabelReq) (result GetAddressesByLabelResp, err error) {
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "getaddressesbylabel", args); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
 	return
 }
 
@@ -593,9 +640,9 @@ func (bc *BitcoindClient) GetBalance(ctx context.Context, args GetBalanceReq) (r
 //      "trusted" : n,              (numeric) trusted balance (outputs created by the wallet or confirmed outputs)
 //      "untrusted_pending" : n,    (numeric) untrusted pending balance (outputs created by others that are in the mempool)
 //      "immature" : n,             (numeric) balance from immature coinbase outputs
-//      "used" : n                  (numeric) (only present if avoid_reuse is set) balance from coins sent to addresses that were previously spent from (potentially privacy violating)
+//      "used" : n                  (numeric, optional) (only present if avoid_reuse is set) balance from coins sent to addresses that were previously spent from (potentially privacy violating)
 //    },
-//    "watchonly" : {               (json object) watchonly balances (not present if wallet does not watch anything)
+//    "watchonly" : {               (json object, optional) watchonly balances (not present if wallet does not watch anything)
 //      "trusted" : n,              (numeric) trusted balance (outputs created by the wallet or confirmed outputs)
 //      "untrusted_pending" : n,    (numeric) untrusted pending balance (outputs created by others that are in the mempool)
 //      "immature" : n              (numeric) balance from immature coinbase outputs
@@ -614,20 +661,22 @@ type GetBalancesResp struct {
 		Immature float64 `json:"immature"`
 
 		// (only present if avoid_reuse is set) balance from coins sent to addresses that were previously spent from (potentially privacy violating)
-		Used float64 `json:"used"`
+		Used *float64 `json:"used,omitempty"`
 	} `json:"mine"`
 
 	// watchonly balances (not present if wallet does not watch anything)
-	WatchOnly struct {
-		// trusted balance (outputs created by the wallet or confirmed outputs)
-		Trusted float64 `json:"trusted"`
+	WatchOnly *GetBalancesRespWatchOnly `json:"watchonly,omitempty"`
+}
 
-		// untrusted pending balance (outputs created by others that are in the mempool)
-		UntrustedPending float64 `json:"untrusted_pending"`
+type GetBalancesRespWatchOnly struct {
+	// trusted balance (outputs created by the wallet or confirmed outputs)
+	Trusted float64 `json:"trusted"`
 
-		// balance from immature coinbase outputs
-		Immature float64 `json:"immature"`
-	} `json:"watchonly"`
+	// untrusted pending balance (outputs created by others that are in the mempool)
+	UntrustedPending float64 `json:"untrusted_pending"`
+
+	// balance from immature coinbase outputs
+	Immature float64 `json:"immature"`
 }
 
 // GetBalances RPC method.
@@ -643,13 +692,13 @@ func (bc *BitcoindClient) GetBalances(ctx context.Context) (result GetBalancesRe
 
 // GetNewAddressReq holds the arguments for the GetNewAddress call.
 //  1. label           (string, optional, default="") The label name for the address to be linked to. It can also be set to the empty string "" to represent the default label. The label does not need to exist, it will be created if there is no label by the given name.
-//  2. address_type    (string, optional, default=set by -addresstype) The address type to use. Options are "legacy", "p2sh-segwit", and "bech32".
+//  2. address_type    (string, optional, default=set by -addresstype) The address type to use. Options are "legacy", "p2sh-segwit", "bech32", and "bech32m".
 type GetNewAddressReq struct {
 	// The label name for the address to be linked to. It can also be set to the empty string "" to represent the default label. The label does not need to exist, it will be created if there is no label by the given name.
 	// Default: ""
 	Label string `json:"label,omitempty"`
 
-	// The address type to use. Options are "legacy", "p2sh-segwit", and "bech32".
+	// The address type to use. Options are "legacy", "p2sh-segwit", "bech32", and "bech32m".
 	// Default: set by -addresstype
 	AddressType string `json:"address_type,omitempty"`
 }
@@ -691,9 +740,9 @@ func (bc *BitcoindClient) GetNewAddress(ctx context.Context, args GetNewAddressR
 }
 
 // GetRawChangeaddressReq holds the arguments for the GetRawChangeaddress call.
-//  1. address_type    (string, optional, default=set by -changetype) The address type to use. Options are "legacy", "p2sh-segwit", and "bech32".
+//  1. address_type    (string, optional, default=set by -changetype) The address type to use. Options are "legacy", "p2sh-segwit", "bech32", and "bech32m".
 type GetRawChangeaddressReq struct {
-	// The address type to use. Options are "legacy", "p2sh-segwit", and "bech32".
+	// The address type to use. Options are "legacy", "p2sh-segwit", "bech32", and "bech32m".
 	// Default: set by -changetype
 	AddressType string `json:"address_type,omitempty"`
 }
@@ -734,8 +783,9 @@ func (bc *BitcoindClient) GetRawChangeaddress(ctx context.Context, args GetRawCh
 }
 
 // GetReceivedByAddressReq holds the arguments for the GetReceivedByAddress call.
-//  1. address    (string, required) The bitcoin address for transactions.
-//  2. minconf    (numeric, optional, default=1) Only include transactions confirmed at least this many times.
+//  1. address                      (string, required) The bitcoin address for transactions.
+//  2. minconf                      (numeric, optional, default=1) Only include transactions confirmed at least this many times.
+//  3. include_immature_coinbase    (boolean, optional, default=false) Include immature coinbase transactions.
 type GetReceivedByAddressReq struct {
 	// The bitcoin address for transactions.
 	Address string `json:"address"`
@@ -743,6 +793,10 @@ type GetReceivedByAddressReq struct {
 	// Only include transactions confirmed at least this many times.
 	// Default: 1
 	MinConf *float64 `json:"minconf,omitempty"`
+
+	// Include immature coinbase transactions.
+	// Default: false
+	IncludeImmatureCoinbase bool `json:"include_immature_coinbase,omitempty"`
 }
 
 // GetReceivedByAddressResp holds the response to the GetReceivedByAddress call.
@@ -780,8 +834,9 @@ func (bc *BitcoindClient) GetReceivedByAddress(ctx context.Context, args GetRece
 }
 
 // GetReceivedByLabelReq holds the arguments for the GetReceivedByLabel call.
-//  1. label      (string, required) The selected label, may be the default label using "".
-//  2. minconf    (numeric, optional, default=1) Only include transactions confirmed at least this many times.
+//  1. label                        (string, required) The selected label, may be the default label using "".
+//  2. minconf                      (numeric, optional, default=1) Only include transactions confirmed at least this many times.
+//  3. include_immature_coinbase    (boolean, optional, default=false) Include immature coinbase transactions.
 type GetReceivedByLabelReq struct {
 	// The selected label, may be the default label using "".
 	Label string `json:"label"`
@@ -789,6 +844,10 @@ type GetReceivedByLabelReq struct {
 	// Only include transactions confirmed at least this many times.
 	// Default: 1
 	MinConf *float64 `json:"minconf,omitempty"`
+
+	// Include immature coinbase transactions.
+	// Default: false
+	IncludeImmatureCoinbase bool `json:"include_immature_coinbase,omitempty"`
 }
 
 // GetReceivedByLabelResp holds the response to the GetReceivedByLabel call.
@@ -845,30 +904,35 @@ type GetTransactionReq struct {
 // GetTransactionResp holds the response to the GetTransaction call.
 //  {                                          (json object)
 //    "amount" : n,                            (numeric) The amount in BTC
-//    "fee" : n,                               (numeric) The amount of the fee in BTC. This is negative and only available for the
+//    "fee" : n,                               (numeric, optional) The amount of the fee in BTC. This is negative and only available for the
 //                                             'send' category of transactions.
 //    "confirmations" : n,                     (numeric) The number of confirmations for the transaction. Negative confirmations means the
 //                                             transaction conflicted that many blocks ago.
-//    "generated" : true|false,                (boolean) Only present if transaction only input is a coinbase one.
-//    "trusted" : true|false,                  (boolean) Only present if we consider transaction to be trusted and so safe to spend from.
-//    "blockhash" : "hex",                     (string) The block hash containing the transaction.
-//    "blockheight" : n,                       (numeric) The block height containing the transaction.
-//    "blockindex" : n,                        (numeric) The index of the transaction in the block that includes it.
-//    "blocktime" : xxx,                       (numeric) The block time expressed in UNIX epoch time.
+//    "generated" : true|false,                (boolean, optional) Only present if the transaction's only input is a coinbase one.
+//    "trusted" : true|false,                  (boolean, optional) Whether we consider the transaction to be trusted and safe to spend from.
+//                                             Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+//    "blockhash" : "hex",                     (string, optional) The block hash containing the transaction.
+//    "blockheight" : n,                       (numeric, optional) The block height containing the transaction.
+//    "blockindex" : n,                        (numeric, optional) The index of the transaction in the block that includes it.
+//    "blocktime" : xxx,                       (numeric, optional) The block time expressed in UNIX epoch time.
 //    "txid" : "hex",                          (string) The transaction id.
 //    "walletconflicts" : [                    (json array) Conflicting transaction ids.
 //      "hex",                                 (string) The transaction id.
 //      ...
 //    ],
+//    "replaced_by_txid" : "hex",              (string, optional) The txid if this tx was replaced.
+//    "replaces_txid" : "hex",                 (string, optional) The txid if the tx replaces one.
+//    "comment" : "str",                       (string, optional)
+//    "to" : "str",                            (string, optional) If a comment to is associated with the transaction.
 //    "time" : xxx,                            (numeric) The transaction time expressed in UNIX epoch time.
 //    "timereceived" : xxx,                    (numeric) The time received expressed in UNIX epoch time.
-//    "comment" : "str",                       (string) If a comment is associated with the transaction, only present if not empty.
+//    "comment" : "str",                       (string, optional) If a comment is associated with the transaction, only present if not empty.
 //    "bip125-replaceable" : "str",            (string) ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-//                                             may be unknown for unconfirmed transactions not in the mempool
+//                                             may be unknown for unconfirmed transactions not in the mempool.
 //    "details" : [                            (json array)
 //      {                                      (json object)
-//        "involvesWatchonly" : true|false,    (boolean) Only returns true if imported addresses were involved in transaction.
-//        "address" : "str",                   (string) The bitcoin address involved in the transaction.
+//        "involvesWatchonly" : true|false,    (boolean, optional) Only returns true if imported addresses were involved in transaction.
+//        "address" : "str",                   (string, optional) The bitcoin address involved in the transaction.
 //        "category" : "str",                  (string) The transaction category.
 //                                             "send"                  Transactions sent.
 //                                             "receive"               Non-coinbase transactions received.
@@ -876,17 +940,17 @@ type GetTransactionReq struct {
 //                                             "immature"              Coinbase transactions received with 100 or fewer confirmations.
 //                                             "orphan"                Orphaned coinbase transactions received.
 //        "amount" : n,                        (numeric) The amount in BTC
-//        "label" : "str",                     (string) A comment for the address/transaction, if any
+//        "label" : "str",                     (string, optional) A comment for the address/transaction, if any
 //        "vout" : n,                          (numeric) the vout value
-//        "fee" : n,                           (numeric) The amount of the fee in BTC. This is negative and only available for the
+//        "fee" : n,                           (numeric, optional) The amount of the fee in BTC. This is negative and only available for the
 //                                             'send' category of transactions.
-//        "abandoned" : true|false             (boolean) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
+//        "abandoned" : true|false             (boolean, optional) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 //                                             'send' category of transactions.
 //      },
 //      ...
 //    ],
 //    "hex" : "hex",                           (string) Raw data for transaction
-//    "decoded" : {                            (json object) Optional, the decoded transaction (only present when `verbose` is passed)
+//    "decoded" : {                            (json object, optional) The decoded transaction (only present when `verbose` is passed)
 //      ...                                    Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
 //    }
 //  }
@@ -896,29 +960,30 @@ type GetTransactionResp struct {
 
 	// The amount of the fee in BTC. This is negative and only available for the
 	// 'send' category of transactions.
-	Fee float64 `json:"fee"`
+	Fee *float64 `json:"fee,omitempty"`
 
 	// The number of confirmations for the transaction. Negative confirmations means the
 	// transaction conflicted that many blocks ago.
 	Confirmations float64 `json:"confirmations"`
 
-	// Only present if transaction only input is a coinbase one.
-	Generated bool `json:"generated"`
+	// Only present if the transaction's only input is a coinbase one.
+	Generated *bool `json:"generated,omitempty"`
 
-	// Only present if we consider transaction to be trusted and so safe to spend from.
-	Trusted bool `json:"trusted"`
+	// Whether we consider the transaction to be trusted and safe to spend from.
+	// Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+	Trusted *bool `json:"trusted,omitempty"`
 
 	// The block hash containing the transaction.
-	Blockhash string `json:"blockhash"`
+	Blockhash string `json:"blockhash,omitempty"`
 
 	// The block height containing the transaction.
-	BlockHeight float64 `json:"blockheight"`
+	BlockHeight *float64 `json:"blockheight,omitempty"`
 
 	// The index of the transaction in the block that includes it.
-	BlockIndex float64 `json:"blockindex"`
+	BlockIndex *float64 `json:"blockindex,omitempty"`
 
 	// The block time expressed in UNIX epoch time.
-	BlockTime float64 `json:"blocktime"`
+	BlockTime *float64 `json:"blocktime,omitempty"`
 
 	// The transaction id.
 	TxID string `json:"txid"`
@@ -927,6 +992,15 @@ type GetTransactionResp struct {
 	// Element: Hex    The transaction id.
 	WalletConflicts []string `json:"walletconflicts"`
 
+	// The txid if this tx was replaced.
+	ReplacedByTxID string `json:"replaced_by_txid,omitempty"`
+
+	// The txid if the tx replaces one.
+	ReplacesTxID string `json:"replaces_txid,omitempty"`
+
+	// If a comment to is associated with the transaction.
+	To string `json:"to,omitempty"`
+
 	// The transaction time expressed in UNIX epoch time.
 	Time float64 `json:"time"`
 
@@ -934,10 +1008,10 @@ type GetTransactionResp struct {
 	TimeReceived float64 `json:"timereceived"`
 
 	// If a comment is associated with the transaction, only present if not empty.
-	Comment string `json:"comment"`
+	Comment string `json:"comment,omitempty"`
 
 	// ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-	// may be unknown for unconfirmed transactions not in the mempool
+	// may be unknown for unconfirmed transactions not in the mempool.
 	BIP125Replaceable string `json:"bip125-replaceable"`
 
 	Details []GetTransactionRespDetails `json:"details"`
@@ -945,17 +1019,16 @@ type GetTransactionResp struct {
 	// Raw data for transaction
 	Hex string `json:"hex"`
 
-	// Optional, the decoded transaction (only present when `verbose` is passed)
-	// Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
-	Decoded DecodeRawTransactionResp `json:"decoded"`
+	// The decoded transaction (only present when `verbose` is passed)
+	Decoded *GetTransactionRespDecoded `json:"decoded,omitempty"`
 }
 
 type GetTransactionRespDetails struct {
 	// Only returns true if imported addresses were involved in transaction.
-	InvolvesWatchOnly bool `json:"involvesWatchonly"`
+	InvolvesWatchOnly *bool `json:"involvesWatchonly,omitempty"`
 
 	// The bitcoin address involved in the transaction.
-	Address string `json:"address"`
+	Address string `json:"address,omitempty"`
 
 	// The transaction category.
 	// "send"                  Transactions sent.
@@ -969,18 +1042,23 @@ type GetTransactionRespDetails struct {
 	Amount float64 `json:"amount"`
 
 	// A comment for the address/transaction, if any
-	Label string `json:"label"`
+	Label string `json:"label,omitempty"`
 
 	// the vout value
 	Vout float64 `json:"vout"`
 
 	// The amount of the fee in BTC. This is negative and only available for the
 	// 'send' category of transactions.
-	Fee float64 `json:"fee"`
+	Fee *float64 `json:"fee,omitempty"`
 
 	// 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 	// 'send' category of transactions.
-	Abandoned bool `json:"abandoned"`
+	Abandoned *bool `json:"abandoned,omitempty"`
+}
+
+type GetTransactionRespDecoded struct {
+	// Equivalent to the RPC decoderawtransaction method, or the RPC getrawtransaction method when `verbose` is passed.
+	DecodeRawTransactionResp
 }
 
 // GetTransaction RPC method.
@@ -1038,9 +1116,9 @@ func (bc *BitcoindClient) GetUnconfirmedBalance(ctx context.Context) (result Get
 //    "unconfirmed_balance" : n,              (numeric) DEPRECATED. Identical to getbalances().mine.untrusted_pending
 //    "immature_balance" : n,                 (numeric) DEPRECATED. Identical to getbalances().mine.immature
 //    "txcount" : n,                          (numeric) the total number of transactions in the wallet
-//    "keypoololdest" : xxx,                  (numeric) the UNIX epoch time of the oldest pre-generated key in the key pool. Legacy wallets only.
+//    "keypoololdest" : xxx,                  (numeric, optional) the UNIX epoch time of the oldest pre-generated key in the key pool. Legacy wallets only.
 //    "keypoolsize" : n,                      (numeric) how many new keys are pre-generated (only counts external keys)
-//    "keypoolsize_hd_internal" : n,          (numeric) how many new keys are pre-generated for internal use (used for change outputs, only appears if the wallet is using this feature, otherwise external keys are used)
+//    "keypoolsize_hd_internal" : n,          (numeric, optional) how many new keys are pre-generated for internal use (used for change outputs, only appears if the wallet is using this feature, otherwise external keys are used)
 //    "unlocked_until" : xxx,                 (numeric, optional) the UNIX epoch time until which the wallet is unlocked for transfers, or 0 if the wallet is locked (only present for passphrase-encrypted wallets)
 //    "paytxfee" : n,                         (numeric) the transaction fee configuration, set in BTC/kvB
 //    "hdseedid" : "hex",                     (string, optional) the Hash160 of the HD seed (only present when HD is enabled)
@@ -1050,7 +1128,8 @@ func (bc *BitcoindClient) GetUnconfirmedBalance(ctx context.Context) (result Get
 //      "duration" : n,                       (numeric) elapsed seconds since scan start
 //      "progress" : n                        (numeric) scanning progress percentage [0.0, 1.0]
 //    },
-//    "descriptors" : true|false              (boolean) whether this wallet uses descriptors for scriptPubKey management
+//    "descriptors" : true|false,             (boolean) whether this wallet uses descriptors for scriptPubKey management
+//    "external_signer" : true|false          (boolean) whether this wallet is configured to use an external signer such as a hardware wallet
 //  }
 type GetWalletInfoResp struct {
 	// the wallet name
@@ -1075,13 +1154,13 @@ type GetWalletInfoResp struct {
 	TxCount float64 `json:"txcount"`
 
 	// the UNIX epoch time of the oldest pre-generated key in the key pool. Legacy wallets only.
-	KeypoolOldest float64 `json:"keypoololdest"`
+	KeypoolOldest *float64 `json:"keypoololdest,omitempty"`
 
 	// how many new keys are pre-generated (only counts external keys)
 	KeypoolSize float64 `json:"keypoolsize"`
 
 	// how many new keys are pre-generated for internal use (used for change outputs, only appears if the wallet is using this feature, otherwise external keys are used)
-	KeypoolSizeHDInternal float64 `json:"keypoolsize_hd_internal"`
+	KeypoolSizeHDInternal *float64 `json:"keypoolsize_hd_internal,omitempty"`
 
 	// the UNIX epoch time until which the wallet is unlocked for transfers, or 0 if the wallet is locked (only present for passphrase-encrypted wallets)
 	UnlockedUntil *float64 `json:"unlocked_until,omitempty"`
@@ -1103,6 +1182,9 @@ type GetWalletInfoResp struct {
 
 	// whether this wallet uses descriptors for scriptPubKey management
 	Descriptors bool `json:"descriptors"`
+
+	// whether this wallet is configured to use an external signer such as a hardware wallet
+	ExternalSigner bool `json:"external_signer"`
 }
 
 type GetWalletInfoRespScanning struct {
@@ -1185,7 +1267,7 @@ func (bc *BitcoindClient) ImportAddress(ctx context.Context, args ImportAddressR
 //                                              0 can be specified to scan the entire blockchain. Blocks up to 2 hours before the earliest timestamp
 //                                              of all descriptors being imported will be scanned.
 //           "internal": bool,                  (boolean, optional, default=false) Whether matching outputs should be treated as not incoming payments (e.g. change)
-//           "label": "str",                    (string, optional, default="") Label to assign to the address, only allowed with internal=false
+//           "label": "str",                    (string, optional, default="") Label to assign to the address, only allowed with internal=false. Disabled for ranged descriptors
 //         },
 //         ...
 //       ]
@@ -1219,7 +1301,7 @@ type ImportDescriptorsReqRequests struct {
 	// Default: false
 	Internal bool `json:"internal,omitempty"`
 
-	// Label to assign to the address, only allowed with internal=false
+	// Label to assign to the address, only allowed with internal=false. Disabled for ranged descriptors
 	// Default: ""
 	Label string `json:"label,omitempty"`
 }
@@ -1259,7 +1341,6 @@ func (alts *ImportDescriptorsResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "ImportDescriptorsResp"}
 }
 
-// Response is an array with the same size as the input that has the execution result
 type ImportDescriptorsRespElement struct {
 	Success bool `json:"success"`
 
@@ -1413,7 +1494,6 @@ func (alts *ImportMultiResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "ImportMultiResp"}
 }
 
-// Response is an array with the same size as the input that has the execution result
 type ImportMultiRespElement struct {
 	Success bool `json:"success"`
 
@@ -1529,10 +1609,10 @@ func (bc *BitcoindClient) ImportWallet(ctx context.Context, args ImportWalletReq
 }
 
 // KeypoolRefillReq holds the arguments for the KeypoolRefill call.
-//  1. newsize    (numeric, optional, default=100) The new keypool size
+//  1. newsize    (numeric, optional, default=1000, or as set by -keypool) The new keypool size
 type KeypoolRefillReq struct {
 	// The new keypool size
-	// Default: 100
+	// Default: 1000, or as set by -keypool
 	NewSize *float64 `json:"newsize,omitempty"`
 }
 
@@ -1557,7 +1637,6 @@ func (bc *BitcoindClient) KeypoolRefill(ctx context.Context, args KeypoolRefillR
 //    ...
 //  ]
 type ListAddressGroupingsResp struct {
-	// Holder of alternative parameter formats, only one will be used, the first that is non-zero.
 	Array [][][]ListAddressGroupingsRespElement
 }
 
@@ -1625,6 +1704,14 @@ func (bc *BitcoindClient) ListAddressGroupings(ctx context.Context) (result List
 	return
 }
 
+// ListDescriptorsReq holds the arguments for the ListDescriptors call.
+//  1. private    (boolean, optional, default=false) Show private descriptors.
+type ListDescriptorsReq struct {
+	// Show private descriptors.
+	// Default: false
+	Private bool `json:"private,omitempty"`
+}
+
 // ListDescriptorsResp holds the response to the ListDescriptors call.
 //  {                                 (json object)
 //    "wallet_name" : "str",          (string) Name of wallet this operation was performed on
@@ -1675,9 +1762,9 @@ type ListDescriptorsRespDescriptors struct {
 
 // ListDescriptors RPC method.
 // List descriptors imported into a descriptor-enabled wallet.
-func (bc *BitcoindClient) ListDescriptors(ctx context.Context) (result ListDescriptorsResp, err error) {
+func (bc *BitcoindClient) ListDescriptors(ctx context.Context, args ListDescriptorsReq) (result ListDescriptorsResp, err error) {
 	var resultRaw json.RawMessage
-	if resultRaw, err = bc.sendRequest(ctx, "listdescriptors", nil); err != nil {
+	if resultRaw, err = bc.sendRequest(ctx, "listdescriptors", args); err != nil {
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
@@ -1777,10 +1864,11 @@ func (bc *BitcoindClient) ListLockUnspent(ctx context.Context) (result ListLockU
 }
 
 // ListReceivedByAddressReq holds the arguments for the ListReceivedByAddress call.
-//  1. minconf              (numeric, optional, default=1) The minimum number of confirmations before payments are included.
-//  2. include_empty        (boolean, optional, default=false) Whether to include addresses that haven't received any payments.
-//  3. include_watchonly    (boolean, optional, default=true for watch-only wallets, otherwise false) Whether to include watch-only addresses (see 'importaddress')
-//  4. address_filter       (string, optional) If present, only return information on this address.
+//  1. minconf                      (numeric, optional, default=1) The minimum number of confirmations before payments are included.
+//  2. include_empty                (boolean, optional, default=false) Whether to include addresses that haven't received any payments.
+//  3. include_watchonly            (boolean, optional, default=true for watch-only wallets, otherwise false) Whether to include watch-only addresses (see 'importaddress')
+//  4. address_filter               (string, optional) If present and non-empty, only return information on this address.
+//  5. include_immature_coinbase    (boolean, optional, default=false) Include immature coinbase transactions.
 type ListReceivedByAddressReq struct {
 	// The minimum number of confirmations before payments are included.
 	// Default: 1
@@ -1794,14 +1882,18 @@ type ListReceivedByAddressReq struct {
 	// Default: true for watch-only wallets, otherwise false
 	IncludeWatchOnly *bool `json:"include_watchonly,omitempty"`
 
-	// If present, only return information on this address.
+	// If present and non-empty, only return information on this address.
 	AddressFilter string `json:"address_filter,omitempty"`
+
+	// Include immature coinbase transactions.
+	// Default: false
+	IncludeImmatureCoinbase bool `json:"include_immature_coinbase,omitempty"`
 }
 
 // ListReceivedByAddressResp holds the response to the ListReceivedByAddress call.
 //  [                                        (json array)
 //    {                                      (json object)
-//      "involvesWatchonly" : true|false,    (boolean) Only returns true if imported addresses were involved in transaction
+//      "involvesWatchonly" : true|false,    (boolean, optional) Only returns true if imported addresses were involved in transaction
 //      "address" : "str",                   (string) The receiving address
 //      "amount" : n,                        (numeric) The total amount in BTC received by the address
 //      "confirmations" : n,                 (numeric) The number of confirmations of the most recent transaction included
@@ -1835,7 +1927,7 @@ func (alts *ListReceivedByAddressResp) UnmarshalJSON(b []byte) error {
 
 type ListReceivedByAddressRespElement struct {
 	// Only returns true if imported addresses were involved in transaction
-	InvolvesWatchOnly bool `json:"involvesWatchonly"`
+	InvolvesWatchOnly *bool `json:"involvesWatchonly,omitempty"`
 
 	// The receiving address
 	Address string `json:"address"`
@@ -1865,9 +1957,10 @@ func (bc *BitcoindClient) ListReceivedByAddress(ctx context.Context, args ListRe
 }
 
 // ListReceivedByLabelReq holds the arguments for the ListReceivedByLabel call.
-//  1. minconf              (numeric, optional, default=1) The minimum number of confirmations before payments are included.
-//  2. include_empty        (boolean, optional, default=false) Whether to include labels that haven't received any payments.
-//  3. include_watchonly    (boolean, optional, default=true for watch-only wallets, otherwise false) Whether to include watch-only addresses (see 'importaddress')
+//  1. minconf                      (numeric, optional, default=1) The minimum number of confirmations before payments are included.
+//  2. include_empty                (boolean, optional, default=false) Whether to include labels that haven't received any payments.
+//  3. include_watchonly            (boolean, optional, default=true for watch-only wallets, otherwise false) Whether to include watch-only addresses (see 'importaddress')
+//  4. include_immature_coinbase    (boolean, optional, default=false) Include immature coinbase transactions.
 type ListReceivedByLabelReq struct {
 	// The minimum number of confirmations before payments are included.
 	// Default: 1
@@ -1880,12 +1973,16 @@ type ListReceivedByLabelReq struct {
 	// Whether to include watch-only addresses (see 'importaddress')
 	// Default: true for watch-only wallets, otherwise false
 	IncludeWatchOnly *bool `json:"include_watchonly,omitempty"`
+
+	// Include immature coinbase transactions.
+	// Default: false
+	IncludeImmatureCoinbase bool `json:"include_immature_coinbase,omitempty"`
 }
 
 // ListReceivedByLabelResp holds the response to the ListReceivedByLabel call.
 //  [                                        (json array)
 //    {                                      (json object)
-//      "involvesWatchonly" : true|false,    (boolean) Only returns true if imported addresses were involved in transaction
+//      "involvesWatchonly" : true|false,    (boolean, optional) Only returns true if imported addresses were involved in transaction
 //      "amount" : n,                        (numeric) The total amount received by addresses with this label
 //      "confirmations" : n,                 (numeric) The number of confirmations of the most recent transaction included
 //      "label" : "str"                      (string) The label of the receiving address. The default label is ""
@@ -1914,7 +2011,7 @@ func (alts *ListReceivedByLabelResp) UnmarshalJSON(b []byte) error {
 
 type ListReceivedByLabelRespElement struct {
 	// Only returns true if imported addresses were involved in transaction
-	InvolvesWatchOnly bool `json:"involvesWatchonly"`
+	InvolvesWatchOnly *bool `json:"involvesWatchonly,omitempty"`
 
 	// The total amount received by addresses with this label
 	Amount float64 `json:"amount"`
@@ -1965,7 +2062,7 @@ type ListSinceBlockReq struct {
 //  {                                          (json object)
 //    "transactions" : [                       (json array)
 //      {                                      (json object)
-//        "involvesWatchonly" : true|false,    (boolean) Only returns true if imported addresses were involved in transaction.
+//        "involvesWatchonly" : true|false,    (boolean, optional) Only returns true if imported addresses were involved in transaction.
 //        "address" : "str",                   (string) The bitcoin address of the transaction.
 //        "category" : "str",                  (string) The transaction category.
 //                                             "send"                  Transactions sent.
@@ -1976,34 +2073,38 @@ type ListSinceBlockReq struct {
 //        "amount" : n,                        (numeric) The amount in BTC. This is negative for the 'send' category, and is positive
 //                                             for all other categories
 //        "vout" : n,                          (numeric) the vout value
-//        "fee" : n,                           (numeric) The amount of the fee in BTC. This is negative and only available for the
+//        "fee" : n,                           (numeric, optional) The amount of the fee in BTC. This is negative and only available for the
 //                                             'send' category of transactions.
 //        "confirmations" : n,                 (numeric) The number of confirmations for the transaction. Negative confirmations means the
 //                                             transaction conflicted that many blocks ago.
-//        "generated" : true|false,            (boolean) Only present if transaction only input is a coinbase one.
-//        "trusted" : true|false,              (boolean) Only present if we consider transaction to be trusted and so safe to spend from.
-//        "blockhash" : "hex",                 (string) The block hash containing the transaction.
-//        "blockheight" : n,                   (numeric) The block height containing the transaction.
-//        "blockindex" : n,                    (numeric) The index of the transaction in the block that includes it.
-//        "blocktime" : xxx,                   (numeric) The block time expressed in UNIX epoch time.
+//        "generated" : true|false,            (boolean, optional) Only present if the transaction's only input is a coinbase one.
+//        "trusted" : true|false,              (boolean, optional) Whether we consider the transaction to be trusted and safe to spend from.
+//                                             Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+//        "blockhash" : "hex",                 (string, optional) The block hash containing the transaction.
+//        "blockheight" : n,                   (numeric, optional) The block height containing the transaction.
+//        "blockindex" : n,                    (numeric, optional) The index of the transaction in the block that includes it.
+//        "blocktime" : xxx,                   (numeric, optional) The block time expressed in UNIX epoch time.
 //        "txid" : "hex",                      (string) The transaction id.
 //        "walletconflicts" : [                (json array) Conflicting transaction ids.
 //          "hex",                             (string) The transaction id.
 //          ...
 //        ],
+//        "replaced_by_txid" : "hex",          (string, optional) The txid if this tx was replaced.
+//        "replaces_txid" : "hex",             (string, optional) The txid if the tx replaces one.
+//        "comment" : "str",                   (string, optional)
+//        "to" : "str",                        (string, optional) If a comment to is associated with the transaction.
 //        "time" : xxx,                        (numeric) The transaction time expressed in UNIX epoch time.
 //        "timereceived" : xxx,                (numeric) The time received expressed in UNIX epoch time.
-//        "comment" : "str",                   (string) If a comment is associated with the transaction, only present if not empty.
+//        "comment" : "str",                   (string, optional) If a comment is associated with the transaction, only present if not empty.
 //        "bip125-replaceable" : "str",        (string) ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-//                                             may be unknown for unconfirmed transactions not in the mempool
-//        "abandoned" : true|false,            (boolean) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
+//                                             may be unknown for unconfirmed transactions not in the mempool.
+//        "abandoned" : true|false,            (boolean, optional) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 //                                             'send' category of transactions.
-//        "label" : "str",                     (string) A comment for the address/transaction, if any
-//        "to" : "str"                         (string) If a comment to is associated with the transaction.
+//        "label" : "str"                      (string, optional) A comment for the address/transaction, if any
 //      },
 //      ...
 //    ],
-//    "removed" : [                            (json array) <structure is the same as "transactions" above, only present if include_removed=true>
+//    "removed" : [                            (json array, optional) <structure is the same as "transactions" above, only present if include_removed=true>
 //                                             Note: transactions that were re-added in the active chain will appear as-is in this array, and may thus have a positive confirmation count.
 //      ...
 //    ],
@@ -2014,7 +2115,7 @@ type ListSinceBlockResp struct {
 
 	// <structure is the same as "transactions" above, only present if include_removed=true>
 	// Note: transactions that were re-added in the active chain will appear as-is in this array, and may thus have a positive confirmation count.
-	Removed []ListSinceBlockRespTransactions `json:"removed"`
+	Removed []ListSinceBlockRespTransactions `json:"removed,omitempty"`
 
 	// The hash of the block (target_confirmations-1) from the best block on the main chain, or the genesis hash if the referenced block does not exist yet. This is typically used to feed back into listsinceblock the next time you call it. So you would generally use a target_confirmations of say 6, so you will be continually re-notified of transactions until they've reached 6 confirmations plus any new ones
 	LastBlock string `json:"lastblock"`
@@ -2022,7 +2123,7 @@ type ListSinceBlockResp struct {
 
 type ListSinceBlockRespTransactions struct {
 	// Only returns true if imported addresses were involved in transaction.
-	InvolvesWatchOnly bool `json:"involvesWatchonly"`
+	InvolvesWatchOnly *bool `json:"involvesWatchonly,omitempty"`
 
 	// The bitcoin address of the transaction.
 	Address string `json:"address"`
@@ -2044,29 +2145,30 @@ type ListSinceBlockRespTransactions struct {
 
 	// The amount of the fee in BTC. This is negative and only available for the
 	// 'send' category of transactions.
-	Fee float64 `json:"fee"`
+	Fee *float64 `json:"fee,omitempty"`
 
 	// The number of confirmations for the transaction. Negative confirmations means the
 	// transaction conflicted that many blocks ago.
 	Confirmations float64 `json:"confirmations"`
 
-	// Only present if transaction only input is a coinbase one.
-	Generated bool `json:"generated"`
+	// Only present if the transaction's only input is a coinbase one.
+	Generated *bool `json:"generated,omitempty"`
 
-	// Only present if we consider transaction to be trusted and so safe to spend from.
-	Trusted bool `json:"trusted"`
+	// Whether we consider the transaction to be trusted and safe to spend from.
+	// Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+	Trusted *bool `json:"trusted,omitempty"`
 
 	// The block hash containing the transaction.
-	Blockhash string `json:"blockhash"`
+	Blockhash string `json:"blockhash,omitempty"`
 
 	// The block height containing the transaction.
-	BlockHeight float64 `json:"blockheight"`
+	BlockHeight *float64 `json:"blockheight,omitempty"`
 
 	// The index of the transaction in the block that includes it.
-	BlockIndex float64 `json:"blockindex"`
+	BlockIndex *float64 `json:"blockindex,omitempty"`
 
 	// The block time expressed in UNIX epoch time.
-	BlockTime float64 `json:"blocktime"`
+	BlockTime *float64 `json:"blocktime,omitempty"`
 
 	// The transaction id.
 	TxID string `json:"txid"`
@@ -2075,6 +2177,15 @@ type ListSinceBlockRespTransactions struct {
 	// Element: Hex    The transaction id.
 	WalletConflicts []string `json:"walletconflicts"`
 
+	// The txid if this tx was replaced.
+	ReplacedByTxID string `json:"replaced_by_txid,omitempty"`
+
+	// The txid if the tx replaces one.
+	ReplacesTxID string `json:"replaces_txid,omitempty"`
+
+	// If a comment to is associated with the transaction.
+	To string `json:"to,omitempty"`
+
 	// The transaction time expressed in UNIX epoch time.
 	Time float64 `json:"time"`
 
@@ -2082,21 +2193,18 @@ type ListSinceBlockRespTransactions struct {
 	TimeReceived float64 `json:"timereceived"`
 
 	// If a comment is associated with the transaction, only present if not empty.
-	Comment string `json:"comment"`
+	Comment string `json:"comment,omitempty"`
 
 	// ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-	// may be unknown for unconfirmed transactions not in the mempool
+	// may be unknown for unconfirmed transactions not in the mempool.
 	BIP125Replaceable string `json:"bip125-replaceable"`
 
 	// 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 	// 'send' category of transactions.
-	Abandoned bool `json:"abandoned"`
+	Abandoned *bool `json:"abandoned,omitempty"`
 
 	// A comment for the address/transaction, if any
-	Label string `json:"label"`
-
-	// If a comment to is associated with the transaction.
-	To string `json:"to"`
+	Label string `json:"label,omitempty"`
 }
 
 // ListSinceBlock RPC method.
@@ -2139,7 +2247,7 @@ type ListTransactionsReq struct {
 // ListTransactionsResp holds the response to the ListTransactions call.
 //  [                                        (json array)
 //    {                                      (json object)
-//      "involvesWatchonly" : true|false,    (boolean) Only returns true if imported addresses were involved in transaction.
+//      "involvesWatchonly" : true|false,    (boolean, optional) Only returns true if imported addresses were involved in transaction.
 //      "address" : "str",                   (string) The bitcoin address of the transaction.
 //      "category" : "str",                  (string) The transaction category.
 //                                           "send"                  Transactions sent.
@@ -2149,29 +2257,34 @@ type ListTransactionsReq struct {
 //                                           "orphan"                Orphaned coinbase transactions received.
 //      "amount" : n,                        (numeric) The amount in BTC. This is negative for the 'send' category, and is positive
 //                                           for all other categories
-//      "label" : "str",                     (string) A comment for the address/transaction, if any
+//      "label" : "str",                     (string, optional) A comment for the address/transaction, if any
 //      "vout" : n,                          (numeric) the vout value
-//      "fee" : n,                           (numeric) The amount of the fee in BTC. This is negative and only available for the
+//      "fee" : n,                           (numeric, optional) The amount of the fee in BTC. This is negative and only available for the
 //                                           'send' category of transactions.
 //      "confirmations" : n,                 (numeric) The number of confirmations for the transaction. Negative confirmations means the
 //                                           transaction conflicted that many blocks ago.
-//      "generated" : true|false,            (boolean) Only present if transaction only input is a coinbase one.
-//      "trusted" : true|false,              (boolean) Only present if we consider transaction to be trusted and so safe to spend from.
-//      "blockhash" : "hex",                 (string) The block hash containing the transaction.
-//      "blockheight" : n,                   (numeric) The block height containing the transaction.
-//      "blockindex" : n,                    (numeric) The index of the transaction in the block that includes it.
-//      "blocktime" : xxx,                   (numeric) The block time expressed in UNIX epoch time.
+//      "generated" : true|false,            (boolean, optional) Only present if the transaction's only input is a coinbase one.
+//      "trusted" : true|false,              (boolean, optional) Whether we consider the transaction to be trusted and safe to spend from.
+//                                           Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+//      "blockhash" : "hex",                 (string, optional) The block hash containing the transaction.
+//      "blockheight" : n,                   (numeric, optional) The block height containing the transaction.
+//      "blockindex" : n,                    (numeric, optional) The index of the transaction in the block that includes it.
+//      "blocktime" : xxx,                   (numeric, optional) The block time expressed in UNIX epoch time.
 //      "txid" : "hex",                      (string) The transaction id.
 //      "walletconflicts" : [                (json array) Conflicting transaction ids.
 //        "hex",                             (string) The transaction id.
 //        ...
 //      ],
+//      "replaced_by_txid" : "hex",          (string, optional) The txid if this tx was replaced.
+//      "replaces_txid" : "hex",             (string, optional) The txid if the tx replaces one.
+//      "comment" : "str",                   (string, optional)
+//      "to" : "str",                        (string, optional) If a comment to is associated with the transaction.
 //      "time" : xxx,                        (numeric) The transaction time expressed in UNIX epoch time.
 //      "timereceived" : xxx,                (numeric) The time received expressed in UNIX epoch time.
-//      "comment" : "str",                   (string) If a comment is associated with the transaction, only present if not empty.
+//      "comment" : "str",                   (string, optional) If a comment is associated with the transaction, only present if not empty.
 //      "bip125-replaceable" : "str",        (string) ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-//                                           may be unknown for unconfirmed transactions not in the mempool
-//      "abandoned" : true|false             (boolean) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
+//                                           may be unknown for unconfirmed transactions not in the mempool.
+//      "abandoned" : true|false             (boolean, optional) 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 //                                           'send' category of transactions.
 //    },
 //    ...
@@ -2198,7 +2311,7 @@ func (alts *ListTransactionsResp) UnmarshalJSON(b []byte) error {
 
 type ListTransactionsRespElement struct {
 	// Only returns true if imported addresses were involved in transaction.
-	InvolvesWatchOnly bool `json:"involvesWatchonly"`
+	InvolvesWatchOnly *bool `json:"involvesWatchonly,omitempty"`
 
 	// The bitcoin address of the transaction.
 	Address string `json:"address"`
@@ -2216,36 +2329,37 @@ type ListTransactionsRespElement struct {
 	Amount float64 `json:"amount"`
 
 	// A comment for the address/transaction, if any
-	Label string `json:"label"`
+	Label string `json:"label,omitempty"`
 
 	// the vout value
 	Vout float64 `json:"vout"`
 
 	// The amount of the fee in BTC. This is negative and only available for the
 	// 'send' category of transactions.
-	Fee float64 `json:"fee"`
+	Fee *float64 `json:"fee,omitempty"`
 
 	// The number of confirmations for the transaction. Negative confirmations means the
 	// transaction conflicted that many blocks ago.
 	Confirmations float64 `json:"confirmations"`
 
-	// Only present if transaction only input is a coinbase one.
-	Generated bool `json:"generated"`
+	// Only present if the transaction's only input is a coinbase one.
+	Generated *bool `json:"generated,omitempty"`
 
-	// Only present if we consider transaction to be trusted and so safe to spend from.
-	Trusted bool `json:"trusted"`
+	// Whether we consider the transaction to be trusted and safe to spend from.
+	// Only present when the transaction has 0 confirmations (or negative confirmations, if conflicted).
+	Trusted *bool `json:"trusted,omitempty"`
 
 	// The block hash containing the transaction.
-	Blockhash string `json:"blockhash"`
+	Blockhash string `json:"blockhash,omitempty"`
 
 	// The block height containing the transaction.
-	BlockHeight float64 `json:"blockheight"`
+	BlockHeight *float64 `json:"blockheight,omitempty"`
 
 	// The index of the transaction in the block that includes it.
-	BlockIndex float64 `json:"blockindex"`
+	BlockIndex *float64 `json:"blockindex,omitempty"`
 
 	// The block time expressed in UNIX epoch time.
-	BlockTime float64 `json:"blocktime"`
+	BlockTime *float64 `json:"blocktime,omitempty"`
 
 	// The transaction id.
 	TxID string `json:"txid"`
@@ -2254,6 +2368,15 @@ type ListTransactionsRespElement struct {
 	// Element: Hex    The transaction id.
 	WalletConflicts []string `json:"walletconflicts"`
 
+	// The txid if this tx was replaced.
+	ReplacedByTxID string `json:"replaced_by_txid,omitempty"`
+
+	// The txid if the tx replaces one.
+	ReplacesTxID string `json:"replaces_txid,omitempty"`
+
+	// If a comment to is associated with the transaction.
+	To string `json:"to,omitempty"`
+
 	// The transaction time expressed in UNIX epoch time.
 	Time float64 `json:"time"`
 
@@ -2261,15 +2384,15 @@ type ListTransactionsRespElement struct {
 	TimeReceived float64 `json:"timereceived"`
 
 	// If a comment is associated with the transaction, only present if not empty.
-	Comment string `json:"comment"`
+	Comment string `json:"comment,omitempty"`
 
 	// ("yes|no|unknown") Whether this transaction could be replaced due to BIP125 (replace-by-fee);
-	// may be unknown for unconfirmed transactions not in the mempool
+	// may be unknown for unconfirmed transactions not in the mempool.
 	BIP125Replaceable string `json:"bip125-replaceable"`
 
 	// 'true' if the transaction has been abandoned (inputs are respendable). Only available for the
 	// 'send' category of transactions.
-	Abandoned bool `json:"abandoned"`
+	Abandoned *bool `json:"abandoned,omitempty"`
 }
 
 // ListTransactions RPC method.
@@ -2347,17 +2470,20 @@ type ListUnspentReqQueryOptions struct {
 //    {                              (json object)
 //      "txid" : "hex",              (string) the transaction id
 //      "vout" : n,                  (numeric) the vout value
-//      "address" : "str",           (string) the bitcoin address
-//      "label" : "str",             (string) The associated label, or "" for the default label
+//      "address" : "str",           (string, optional) the bitcoin address
+//      "label" : "str",             (string, optional) The associated label, or "" for the default label
 //      "scriptPubKey" : "str",      (string) the script key
 //      "amount" : n,                (numeric) the transaction output amount in BTC
 //      "confirmations" : n,         (numeric) The number of confirmations
-//      "redeemScript" : "hex",      (string) The redeemScript if scriptPubKey is P2SH
-//      "witnessScript" : "str",     (string) witnessScript if the scriptPubKey is P2WSH or P2SH-P2WSH
+//      "ancestorcount" : n,         (numeric, optional) The number of in-mempool ancestor transactions, including this one (if transaction is in the mempool)
+//      "ancestorsize" : n,          (numeric, optional) The virtual transaction size of in-mempool ancestors, including this one (if transaction is in the mempool)
+//      "ancestorfees" : n,          (numeric, optional) The total fees of in-mempool ancestors (including this one) with fee deltas used for mining priority in sat (if transaction is in the mempool)
+//      "redeemScript" : "hex",      (string, optional) The redeemScript if scriptPubKey is P2SH
+//      "witnessScript" : "str",     (string, optional) witnessScript if the scriptPubKey is P2WSH or P2SH-P2WSH
 //      "spendable" : true|false,    (boolean) Whether we have the private keys to spend this output
 //      "solvable" : true|false,     (boolean) Whether we know how to spend this output, ignoring the lack of keys
-//      "reused" : true|false,       (boolean) (only present if avoid_reuse is set) Whether this output is reused/dirty (sent to an address that was previously spent from)
-//      "desc" : "str",              (string) (only when solvable) A descriptor for spending this output
+//      "reused" : true|false,       (boolean, optional) (only present if avoid_reuse is set) Whether this output is reused/dirty (sent to an address that was previously spent from)
+//      "desc" : "str",              (string, optional) (only when solvable) A descriptor for spending this output
 //      "safe" : true|false          (boolean) Whether this output is considered safe to spend. Unconfirmed transactions
 //                                   from outside keys and unconfirmed replacement transactions are considered unsafe
 //                                   and are not eligible for spending by fundrawtransaction and sendtoaddress.
@@ -2392,10 +2518,10 @@ type ListUnspentRespElement struct {
 	Vout float64 `json:"vout"`
 
 	// the bitcoin address
-	Address string `json:"address"`
+	Address string `json:"address,omitempty"`
 
 	// The associated label, or "" for the default label
-	Label string `json:"label"`
+	Label string `json:"label,omitempty"`
 
 	// the script key
 	ScriptPubkey string `json:"scriptPubKey"`
@@ -2406,11 +2532,20 @@ type ListUnspentRespElement struct {
 	// The number of confirmations
 	Confirmations float64 `json:"confirmations"`
 
+	// The number of in-mempool ancestor transactions, including this one (if transaction is in the mempool)
+	AncestorCount *float64 `json:"ancestorcount,omitempty"`
+
+	// The virtual transaction size of in-mempool ancestors, including this one (if transaction is in the mempool)
+	AncestorSize *float64 `json:"ancestorsize,omitempty"`
+
+	// The total fees of in-mempool ancestors (including this one) with fee deltas used for mining priority in sat (if transaction is in the mempool)
+	AncestorFees *float64 `json:"ancestorfees,omitempty"`
+
 	// The redeemScript if scriptPubKey is P2SH
-	RedeemScript string `json:"redeemScript"`
+	RedeemScript string `json:"redeemScript,omitempty"`
 
 	// witnessScript if the scriptPubKey is P2WSH or P2SH-P2WSH
-	WitnessScript string `json:"witnessScript"`
+	WitnessScript string `json:"witnessScript,omitempty"`
 
 	// Whether we have the private keys to spend this output
 	Spendable bool `json:"spendable"`
@@ -2419,10 +2554,10 @@ type ListUnspentRespElement struct {
 	Solvable bool `json:"solvable"`
 
 	// (only present if avoid_reuse is set) Whether this output is reused/dirty (sent to an address that was previously spent from)
-	Reused bool `json:"reused"`
+	Reused *bool `json:"reused,omitempty"`
 
 	// (only when solvable) A descriptor for spending this output
-	Desc string `json:"desc"`
+	Desc string `json:"desc,omitempty"`
 
 	// Whether this output is considered safe to spend. Unconfirmed transactions
 	// from outside keys and unconfirmed replacement transactions are considered unsafe
@@ -2537,7 +2672,7 @@ type LoadWalletResp struct {
 // LoadWallet RPC method.
 // Loads a wallet from a wallet file or directory.
 // Note that all wallet command-line options used when starting bitcoind will be
-// applied to the new wallet (eg -rescan, etc).
+// applied to the new wallet.
 func (bc *BitcoindClient) LoadWallet(ctx context.Context, args LoadWalletReq) (result LoadWalletResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "loadwallet", args); err != nil {
@@ -2557,6 +2692,7 @@ func (bc *BitcoindClient) LoadWallet(ctx context.Context, args LoadWalletReq) (r
 //         },
 //         ...
 //       ]
+//  3. persistent              (boolean, optional, default=false) Whether to write/erase this lock in the wallet database, or keep the change in memory only. Ignored for unlocking.
 type LockUnspentReq struct {
 	// Whether to unlock (true) or lock (false) the specified transactions
 	Unlock bool `json:"unlock"`
@@ -2564,6 +2700,10 @@ type LockUnspentReq struct {
 	// The transaction outputs and within each, the txid (string) vout (numeric).
 	// Default: []
 	Transactions []LockUnspentReqTransactions `json:"transactions,omitempty"`
+
+	// Whether to write/erase this lock in the wallet database, or keep the change in memory only. Ignored for unlocking.
+	// Default: false
+	Persistent bool `json:"persistent,omitempty"`
 }
 
 type LockUnspentReqTransactions struct {
@@ -2603,8 +2743,9 @@ func (alts *LockUnspentResp) UnmarshalJSON(b []byte) error {
 // If no transaction outputs are specified when unlocking then all current locked transaction outputs are unlocked.
 // A locked transaction output will not be chosen by automatic coin selection, when spending bitcoins.
 // Manually selected coins are automatically unlocked.
-// Locks are stored in memory only. Nodes start with zero locked outputs, and the locked output list
-// is always cleared (by virtue of process exit) when a node stops or fails.
+// Locks are stored in memory only, unless persistent=true, in which case they will be written to the
+// wallet database and loaded on node start. Unwritten (persistent=false) locks are always cleared
+// (by virtue of process exit) when a node stops or fails. Unlocking will clear both persistent and not.
 // Also see the listunspent call
 func (bc *BitcoindClient) LockUnspent(ctx context.Context, args LockUnspentReq) (result LockUnspentResp, err error) {
 	var resultRaw json.RawMessage
@@ -2612,6 +2753,19 @@ func (bc *BitcoindClient) LockUnspent(ctx context.Context, args LockUnspentReq) 
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
+	return
+}
+
+// NewKeypool RPC method.
+// Entirely clears and refills the keypool.
+// WARNING: On non-HD wallets, this will require a new backup immediately, to include the new keys.
+// When restoring a backup of an HD wallet created before the newkeypool command is run, funds received to
+// new addresses may not appear automatically. They have not been lost, but the wallet may not find them.
+// This can be fixed by running the newkeypool command on the backup and then rescanning, so the wallet
+// re-generates the required keys.
+// Requires wallet passphrase to be set with walletpassphrase call if wallet is encrypted.
+func (bc *BitcoindClient) NewKeypool(ctx context.Context) (err error) {
+	_, err = bc.sendRequest(ctx, "newkeypool", nil)
 	return
 }
 
@@ -2732,6 +2886,45 @@ func (bc *BitcoindClient) RescanBlockchain(ctx context.Context, args RescanBlock
 	return
 }
 
+// RestoreWalletReq holds the arguments for the RestoreWallet call.
+//  1. wallet_name        (string, required) The name that will be applied to the restored wallet
+//  2. backup_file        (string, required) The backup file that will be used to restore the wallet.
+//  3. load_on_startup    (boolean, optional) Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged.
+type RestoreWalletReq struct {
+	// The name that will be applied to the restored wallet
+	WalletName string `json:"wallet_name"`
+
+	// The backup file that will be used to restore the wallet.
+	BackupFile string `json:"backup_file"`
+
+	// Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged.
+	LoadOnStartup *bool `json:"load_on_startup,omitempty"`
+}
+
+// RestoreWalletResp holds the response to the RestoreWallet call.
+//  {                       (json object)
+//    "name" : "str",       (string) The wallet name if restored successfully.
+//    "warning" : "str"     (string) Warning message if wallet was not loaded cleanly.
+//  }
+type RestoreWalletResp struct {
+	// The wallet name if restored successfully.
+	Name string `json:"name"`
+
+	// Warning message if wallet was not loaded cleanly.
+	Warning string `json:"warning"`
+}
+
+// RestoreWallet RPC method.
+// Restore and loads a wallet from backup.
+func (bc *BitcoindClient) RestoreWallet(ctx context.Context, args RestoreWalletReq) (result RestoreWalletResp, err error) {
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "restorewallet", args); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
+	return
+}
+
 // SendReq holds the arguments for the Send call.
 //  1. outputs                               (json array, required) The outputs (key-value pairs), where none of the keys are duplicated.
 //                                           That is, each address can only appear once and there can only be one 'data' object.
@@ -2762,11 +2955,6 @@ func (bc *BitcoindClient) RescanBlockchain(ctx context.Context, args RescanBlock
 //         "change_address": "hex",          (string, optional, default=pool address) The bitcoin address to receive the change
 //         "change_position": n,             (numeric, optional, default=random) The index of the change output
 //         "change_type": "str",             (string, optional, default=set by -changetype) The output type to use. Only valid if change_address is not specified. Options are "legacy", "p2sh-segwit", and "bech32".
-//         "conf_target": n,                 (numeric, optional, default=wallet -txconfirmtarget) Confirmation target in blocks
-//         "estimate_mode": "str",           (string, optional, default="unset") The fee estimate mode, must be one of (case insensitive):
-//                                           "unset"
-//                                           "economical"
-//                                           "conservative"
 //         "fee_rate": amount,               (numeric or string, optional, default=not set, fall back to wallet fee estimation) Specify a fee rate in sat/vB.
 //         "include_watching": bool,         (boolean, optional, default=true for watch-only wallets, otherwise false) Also select inputs which are watch only.
 //                                           Only solvable inputs can be used. Watch-only destinations are solvable if the public key and/or output script was imported,
@@ -2775,6 +2963,7 @@ func (bc *BitcoindClient) RescanBlockchain(ctx context.Context, args RescanBlock
 //           "txid",                         (string, required) The transaction id
 //           vout,                           (numeric, required) The output number
 //           sequence,                       (numeric, required) The sequence number
+//           weight,                         (numeric, optional, default=Calculated from wallet and solving data) The maximum weight for this input, including the weight of the outpoint and sequence number. Note that signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
 //           ...
 //         ],
 //         "locktime": n,                    (numeric, optional, default=0) Raw locktime. Non-0 value also locktime-activates inputs
@@ -2787,8 +2976,28 @@ func (bc *BitcoindClient) RescanBlockchain(ctx context.Context, args RescanBlock
 //           vout_index,                     (numeric) The zero-based output index, before a change output is added.
 //           ...
 //         ],
-//         "replaceable": bool,              (boolean, optional, default=wallet default) Marks this transaction as BIP125 replaceable.
+//         "conf_target": n,                 (numeric, optional, default=wallet -txconfirmtarget) Confirmation target in blocks
+//         "estimate_mode": "str",           (string, optional, default="unset") The fee estimate mode, must be one of (case insensitive):
+//                                           "unset"
+//                                           "economical"
+//                                           "conservative"
+//         "replaceable": bool,              (boolean, optional, default=wallet default) Marks this transaction as BIP125-replaceable.
 //                                           Allows this transaction to be replaced by a transaction with higher fees
+//         "solving_data": {                 (json object, optional) Keys and scripts needed for producing a final transaction with a dummy signature.
+//                                           Used for fee estimation during coin selection.
+//           "pubkeys": [                    (json array, optional, default=[]) Public keys involved in this transaction.
+//             "pubkey",                     (string) A public key
+//             ...
+//           ],
+//           "scripts": [                    (json array, optional, default=[]) Scripts involved in this transaction.
+//             "script",                     (string) A script
+//             ...
+//           ],
+//           "descriptors": [                (json array, optional, default=[]) Descriptors that provide solving data for this transaction.
+//             "descriptor",                 (string) A descriptor
+//             ...
+//           ],
+//         },
 //       }
 type SendReq struct {
 	// The outputs (key-value pairs), where none of the keys are duplicated.
@@ -2817,6 +3026,7 @@ type SendReq struct {
 // Holder of alternative parameter formats, only one will be used, the first that is non-zero.
 type SendReqOutputs struct {
 	// A key-value pair. The key (string) is the bitcoin address, the value (float or string) is the amount in BTC
+	// Key: address, Value: amount
 	A map[string]float64
 
 	B struct {
@@ -2877,17 +3087,6 @@ type SendReqOptions struct {
 	// Default: set by -changetype
 	ChangeType string `json:"change_type,omitempty"`
 
-	// Confirmation target in blocks
-	// Default: wallet -txconfirmtarget
-	ConfTarget *float64 `json:"conf_target,omitempty"`
-
-	// The fee estimate mode, must be one of (case insensitive):
-	// "unset"
-	// "economical"
-	// "conservative"
-	// Default: "unset"
-	EstimateMode string `json:"estimate_mode,omitempty"`
-
 	// Specify a fee rate in sat/vB.
 	// Default: not set, fall back to wallet fee estimation
 	FeeRate *float64 `json:"fee_rate,omitempty"`
@@ -2920,10 +3119,25 @@ type SendReqOptions struct {
 	// Element: VoutIndex    The zero-based output index, before a change output is added.
 	SubtractFeeFromOutputs []float64 `json:"subtract_fee_from_outputs,omitempty"`
 
-	// Marks this transaction as BIP125 replaceable.
+	// Confirmation target in blocks
+	// Default: wallet -txconfirmtarget
+	ConfTarget *float64 `json:"conf_target,omitempty"`
+
+	// The fee estimate mode, must be one of (case insensitive):
+	// "unset"
+	// "economical"
+	// "conservative"
+	// Default: "unset"
+	EstimateMode string `json:"estimate_mode,omitempty"`
+
+	// Marks this transaction as BIP125-replaceable.
 	// Allows this transaction to be replaced by a transaction with higher fees
 	// Default: wallet default
 	Replaceable *bool `json:"replaceable,omitempty"`
+
+	// Keys and scripts needed for producing a final transaction with a dummy signature.
+	// Used for fee estimation during coin selection.
+	SolvingData *SendReqOptionsSolvingData `json:"solving_data,omitempty"`
 }
 
 // Holder of alternative parameter formats, only one will be used, the first that is non-zero.
@@ -2936,6 +3150,10 @@ type SendReqOptionsInputs struct {
 
 	// The sequence number
 	Sequence float64
+
+	// The maximum weight for this input, including the weight of the outpoint and sequence number. Note that signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
+	// Default: Calculated from wallet and solving data
+	Weight float64
 }
 
 func (alts SendReqOptionsInputs) MarshalJSON() ([]byte, error) {
@@ -2945,7 +3163,10 @@ func (alts SendReqOptionsInputs) MarshalJSON() ([]byte, error) {
 	if !reflect.ValueOf(alts.Vout).IsZero() {
 		return json.Marshal(alts.Vout)
 	}
-	return json.Marshal(alts.Sequence)
+	if !reflect.ValueOf(alts.Sequence).IsZero() {
+		return json.Marshal(alts.Sequence)
+	}
+	return json.Marshal(alts.Weight)
 }
 
 func (alts *SendReqOptionsInputs) UnmarshalJSON(b []byte) error {
@@ -2969,28 +3190,48 @@ func (alts *SendReqOptionsInputs) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	alts.Sequence = reset.Sequence
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.Weight) == nil {
+		return nil
+	}
+	alts.Weight = reset.Weight
 	return &UnmarshalError{B: b, structName: "SendReqOptionsInputs"}
+}
+
+type SendReqOptionsSolvingData struct {
+	// Public keys involved in this transaction.
+	// Element: Pubkey    A public key
+	Pubkeys []string `json:"pubkeys,omitempty"`
+
+	// Scripts involved in this transaction.
+	// Element: Script    A script
+	Scripts []string `json:"scripts,omitempty"`
+
+	// Descriptors that provide solving data for this transaction.
+	// Element: Descriptor    A descriptor
+	Descriptors []string `json:"descriptors,omitempty"`
 }
 
 // SendResp holds the response to the Send call.
 //  {                             (json object)
 //    "complete" : true|false,    (boolean) If the transaction has a complete set of signatures
-//    "txid" : "hex",             (string) The transaction id for the send. Only 1 transaction is created regardless of the number of addresses.
-//    "hex" : "hex",              (string) If add_to_wallet is false, the hex-encoded raw transaction with signature(s)
-//    "psbt" : "str"              (string) If more signatures are needed, or if add_to_wallet is false, the base64-encoded (partially) signed transaction
+//    "txid" : "hex",             (string, optional) The transaction id for the send. Only 1 transaction is created regardless of the number of addresses.
+//    "hex" : "hex",              (string, optional) If add_to_wallet is false, the hex-encoded raw transaction with signature(s)
+//    "psbt" : "str"              (string, optional) If more signatures are needed, or if add_to_wallet is false, the base64-encoded (partially) signed transaction
 //  }
 type SendResp struct {
 	// If the transaction has a complete set of signatures
 	Complete bool `json:"complete"`
 
 	// The transaction id for the send. Only 1 transaction is created regardless of the number of addresses.
-	TxID string `json:"txid"`
+	TxID string `json:"txid,omitempty"`
 
 	// If add_to_wallet is false, the hex-encoded raw transaction with signature(s)
-	Hex string `json:"hex"`
+	Hex string `json:"hex,omitempty"`
 
 	// If more signatures are needed, or if add_to_wallet is false, the base64-encoded (partially) signed transaction
-	Psbt string `json:"psbt"`
+	Psbt string `json:"psbt,omitempty"`
 }
 
 // Send RPC method.
@@ -3035,6 +3276,8 @@ type SendManyReq struct {
 	Dummy string `json:"dummy"`
 
 	// The addresses and amounts
+	// The bitcoin address is the key, the numeric amount (can be string) in BTC is the value
+	// Key: address, Value: amount
 	Amounts map[string]float64 `json:"amounts"`
 
 	// A comment
@@ -3081,7 +3324,7 @@ type SendManyReq struct {
 //  {                          (json object)
 //    "txid" : "hex",          (string) The transaction id for the send. Only 1 transaction is created regardless of
 //                             the number of addresses.
-//    "fee reason" : "str"     (string) The transaction fee reason.
+//    "fee_reason" : "str"     (string) The transaction fee reason.
 //  }
 type SendManyResp struct {
 	// The transaction id for the send. Only 1 transaction is created regardless of
@@ -3122,7 +3365,7 @@ type SendManyRespIfVerboseIsSetToTrue struct {
 	TxID string `json:"txid"`
 
 	// The transaction fee reason.
-	FeeReason string `json:"fee reason"`
+	FeeReason string `json:"fee_reason"`
 }
 
 // SendMany RPC method.
@@ -3215,7 +3458,7 @@ type SendToAddressReq struct {
 // ALTERNATIVE (if verbose is set to true)
 //  {                          (json object)
 //    "txid" : "hex",          (string) The transaction id.
-//    "fee reason" : "str"     (string) The transaction fee reason.
+//    "fee_reason" : "str"     (string) The transaction fee reason.
 //  }
 type SendToAddressResp struct {
 	// The transaction id.
@@ -3254,7 +3497,7 @@ type SendToAddressRespIfVerboseIsSetToTrue struct {
 	TxID string `json:"txid"`
 
 	// The transaction fee reason.
-	FeeReason string `json:"fee reason"`
+	FeeReason string `json:"fee_reason"`
 }
 
 // SendToAddress RPC method.
@@ -3460,7 +3703,7 @@ func (bc *BitcoindClient) SignMessage(ctx context.Context, args SignMessageReq) 
 //         },
 //         ...
 //       ]
-//  3. sighashtype                      (string, optional, default="DEFAULT") The signature hash type. Must be one of
+//  3. sighashtype                      (string, optional, default="DEFAULT for Taproot, ALL otherwise") The signature hash type. Must be one of
 //                                      "DEFAULT"
 //                                      "ALL"
 //                                      "NONE"
@@ -3483,7 +3726,7 @@ type SignRawTransactionWithWalletReq struct {
 	// "ALL|ANYONECANPAY"
 	// "NONE|ANYONECANPAY"
 	// "SINGLE|ANYONECANPAY"
-	// Default: "DEFAULT"
+	// Default: "DEFAULT for Taproot, ALL otherwise"
 	SigHashType string `json:"sighashtype,omitempty"`
 }
 
@@ -3515,6 +3758,10 @@ type SignRawTransactionWithWalletReqPrevTxs struct {
 //      {                         (json object)
 //        "txid" : "hex",         (string) The hash of the referenced, previous transaction
 //        "vout" : n,             (numeric) The index of the output to spent and used as input
+//        "witness" : [           (json array)
+//          "hex",                (string)
+//          ...
+//        ],
 //        "scriptSig" : "hex",    (string) The hex-encoded signature script
 //        "sequence" : n,         (numeric) Script sequence number
 //        "error" : "str"         (string) Verification or signing error related to the input
@@ -3539,6 +3786,9 @@ type SignRawTransactionWithWalletRespErrors struct {
 
 	// The index of the output to spent and used as input
 	Vout float64 `json:"vout"`
+
+	// Element: Hex
+	Witness []string `json:"witness"`
 
 	// The hex-encoded signature script
 	ScriptSig string `json:"scriptSig"`
@@ -3649,6 +3899,7 @@ func (bc *BitcoindClient) UpgradeWallet(ctx context.Context, args UpgradeWalletR
 //           "txid": "hex",               (string, required) The transaction id
 //           "vout": n,                   (numeric, required) The output number
 //           "sequence": n,               (numeric, optional, default=depends on the value of the 'locktime' and 'options.replaceable' arguments) The sequence number
+//           "weight": n,                 (numeric, optional, default=Calculated from wallet and solving data) The maximum weight for this input, including the weight of the outpoint and sequence number. Note that signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
 //         },
 //         ...
 //       ]
@@ -3687,13 +3938,28 @@ func (bc *BitcoindClient) UpgradeWallet(ctx context.Context, args UpgradeWalletR
 //           vout_index,                  (numeric) The zero-based output index, before a change output is added.
 //           ...
 //         ],
-//         "replaceable": bool,           (boolean, optional, default=wallet default) Marks this transaction as BIP125 replaceable.
-//                                        Allows this transaction to be replaced by a transaction with higher fees
 //         "conf_target": n,              (numeric, optional, default=wallet -txconfirmtarget) Confirmation target in blocks
 //         "estimate_mode": "str",        (string, optional, default="unset") The fee estimate mode, must be one of (case insensitive):
 //                                        "unset"
 //                                        "economical"
 //                                        "conservative"
+//         "replaceable": bool,           (boolean, optional, default=wallet default) Marks this transaction as BIP125-replaceable.
+//                                        Allows this transaction to be replaced by a transaction with higher fees
+//         "solving_data": {              (json object, optional) Keys and scripts needed for producing a final transaction with a dummy signature.
+//                                        Used for fee estimation during coin selection.
+//           "pubkeys": [                 (json array, optional, default=[]) Public keys involved in this transaction.
+//             "pubkey",                  (string) A public key
+//             ...
+//           ],
+//           "scripts": [                 (json array, optional, default=[]) Scripts involved in this transaction.
+//             "script",                  (string) A script
+//             ...
+//           ],
+//           "descriptors": [             (json array, optional, default=[]) Descriptors that provide solving data for this transaction.
+//             "descriptor",              (string) A descriptor
+//             ...
+//           ],
+//         },
 //       }
 //  5. bip32derivs                        (boolean, optional, default=true) Include BIP 32 derivation paths for public keys if we know them
 type WalletCreateFundedPsbtReq struct {
@@ -3727,11 +3993,16 @@ type WalletCreateFundedPsbtReqInputs struct {
 	// The sequence number
 	// Default: depends on the value of the 'locktime' and 'options.replaceable' arguments
 	Sequence *float64 `json:"sequence,omitempty"`
+
+	// The maximum weight for this input, including the weight of the outpoint and sequence number. Note that signature sizes are not guaranteed to be consistent, so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures.Remember to convert serialized sizes to weight units when necessary.
+	// Default: Calculated from wallet and solving data
+	Weight *float64 `json:"weight,omitempty"`
 }
 
 // Holder of alternative parameter formats, only one will be used, the first that is non-zero.
 type WalletCreateFundedPsbtReqOutputs struct {
 	// A key-value pair. The key (string) is the bitcoin address, the value (float or string) is the amount in BTC
+	// Key: address, Value: amount
 	A map[string]float64
 
 	B struct {
@@ -3811,11 +4082,6 @@ type WalletCreateFundedPsbtReqOptions struct {
 	// Element: VoutIndex    The zero-based output index, before a change output is added.
 	SubtractFeeFromOutputs []float64 `json:"subtractFeeFromOutputs,omitempty"`
 
-	// Marks this transaction as BIP125 replaceable.
-	// Allows this transaction to be replaced by a transaction with higher fees
-	// Default: wallet default
-	Replaceable *bool `json:"replaceable,omitempty"`
-
 	// Confirmation target in blocks
 	// Default: wallet -txconfirmtarget
 	ConfTarget *float64 `json:"conf_target,omitempty"`
@@ -3826,6 +4092,29 @@ type WalletCreateFundedPsbtReqOptions struct {
 	// "conservative"
 	// Default: "unset"
 	EstimateMode string `json:"estimate_mode,omitempty"`
+
+	// Marks this transaction as BIP125-replaceable.
+	// Allows this transaction to be replaced by a transaction with higher fees
+	// Default: wallet default
+	Replaceable *bool `json:"replaceable,omitempty"`
+
+	// Keys and scripts needed for producing a final transaction with a dummy signature.
+	// Used for fee estimation during coin selection.
+	SolvingData *WalletCreateFundedPsbtReqOptionsSolvingData `json:"solving_data,omitempty"`
+}
+
+type WalletCreateFundedPsbtReqOptionsSolvingData struct {
+	// Public keys involved in this transaction.
+	// Element: Pubkey    A public key
+	Pubkeys []string `json:"pubkeys,omitempty"`
+
+	// Scripts involved in this transaction.
+	// Element: Script    A script
+	Scripts []string `json:"scripts,omitempty"`
+
+	// Descriptors that provide solving data for this transaction.
+	// Element: Descriptor    A descriptor
+	Descriptors []string `json:"descriptors,omitempty"`
 }
 
 // WalletCreateFundedPsbtResp holds the response to the WalletCreateFundedPsbt call.
@@ -3848,6 +4137,8 @@ type WalletCreateFundedPsbtResp struct {
 // WalletCreateFundedPsbt RPC method.
 // Creates and funds a transaction in the Partially Signed Transaction format.
 // Implements the Creator and Updater roles.
+// All existing inputs must either have their previous output transaction be in the wallet
+// or be in the UTXO set. Solving data must be provided for non-wallet inputs.
 func (bc *BitcoindClient) WalletCreateFundedPsbt(ctx context.Context, args WalletCreateFundedPsbtReq) (result WalletCreateFundedPsbtResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "walletcreatefundedpsbt", args); err != nil {
@@ -3858,8 +4149,9 @@ func (bc *BitcoindClient) WalletCreateFundedPsbt(ctx context.Context, args Walle
 }
 
 // WalletDisplayAddressReq holds the arguments for the WalletDisplayAddress call.
-//  1. address    (string, required)
+//  1. address    (string, required) bitcoin address to display
 type WalletDisplayAddressReq struct {
+	// bitcoin address to display
 	Address string `json:"address"`
 }
 
@@ -3934,8 +4226,8 @@ func (bc *BitcoindClient) WalletPassphraseChange(ctx context.Context, args Walle
 
 // WalletProcessPsbtReq holds the arguments for the WalletProcessPsbt call.
 //  1. psbt           (string, required) The transaction base64 string
-//  2. sign           (boolean, optional, default=true) Also sign the transaction when updating
-//  3. sighashtype    (string, optional, default="DEFAULT") The signature hash type to sign with if not specified by the PSBT. Must be one of
+//  2. sign           (boolean, optional, default=true) Also sign the transaction when updating (requires wallet to be unlocked)
+//  3. sighashtype    (string, optional, default="DEFAULT for Taproot, ALL otherwise") The signature hash type to sign with if not specified by the PSBT. Must be one of
 //                    "DEFAULT"
 //                    "ALL"
 //                    "NONE"
@@ -3944,11 +4236,12 @@ func (bc *BitcoindClient) WalletPassphraseChange(ctx context.Context, args Walle
 //                    "NONE|ANYONECANPAY"
 //                    "SINGLE|ANYONECANPAY"
 //  4. bip32derivs    (boolean, optional, default=true) Include BIP 32 derivation paths for public keys if we know them
+//  5. finalize       (boolean, optional, default=true) Also finalize inputs if possible
 type WalletProcessPsbtReq struct {
 	// The transaction base64 string
 	Psbt string `json:"psbt"`
 
-	// Also sign the transaction when updating
+	// Also sign the transaction when updating (requires wallet to be unlocked)
 	// Default: true
 	Sign *bool `json:"sign,omitempty"`
 
@@ -3960,12 +4253,16 @@ type WalletProcessPsbtReq struct {
 	// "ALL|ANYONECANPAY"
 	// "NONE|ANYONECANPAY"
 	// "SINGLE|ANYONECANPAY"
-	// Default: "DEFAULT"
+	// Default: "DEFAULT for Taproot, ALL otherwise"
 	SigHashType string `json:"sighashtype,omitempty"`
 
 	// Include BIP 32 derivation paths for public keys if we know them
 	// Default: true
 	BIP32Derivs *bool `json:"bip32derivs,omitempty"`
+
+	// Also finalize inputs if possible
+	// Default: true
+	Finalize *bool `json:"finalize,omitempty"`
 }
 
 // WalletProcessPsbtResp holds the response to the WalletProcessPsbt call.

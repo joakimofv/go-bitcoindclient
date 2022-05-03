@@ -49,6 +49,17 @@ func run() error {
 	if err != nil {
 		return errors.New("In order to run this you need to have bitcoin-cli installed, and bitcoind running in regtest mode.")
 	}
+	// in v23 the '== Generating ==' section mysteriously disappeared from the list,
+	// but the methods still exist and can be polled by 'help method', so add them manually.
+	if !bytes.Contains(help, []byte("== Generating ==")) {
+		help = append(help, []byte(`
+== Generating ==
+generateblock
+generatetoaddress
+generatetodescriptor
+`)...)
+	}
+
 	groups := parseHelp(help)
 	var allMethods []methodInfo
 	var contents [][]byte
@@ -119,18 +130,15 @@ func run() error {
 	buf := new(bytes.Buffer)
 	// Push the "Stop" test to the back because it shuts down the bitcoind.
 	// Push the "CreateWallet" test to the front because some other methods depend on there being a wallet.
-	for i := 0; i < len(allMethods)-1; i++ {
-		if allMethods[i].Camelcase == "Stop" {
-			tmp := allMethods[i+1]
-			allMethods[i+1] = allMethods[i]
-			allMethods[i] = tmp
+	sort.Slice(allMethods, func(i, j int) bool {
+		if allMethods[i].Camelcase == "CreateWallet" || allMethods[j].Camelcase == "Stop" {
+			return true
 		}
-		if allMethods[len(allMethods)-1-i].Camelcase == "CreateWallet" {
-			tmp := allMethods[len(allMethods)-1-i-1]
-			allMethods[len(allMethods)-1-i-1] = allMethods[len(allMethods)-1-i]
-			allMethods[len(allMethods)-1-i] = tmp
+		if allMethods[i].Camelcase == "Stop" || allMethods[j].Camelcase == "CreateWallet" {
+			return false
 		}
-	}
+		return allMethods[i].Camelcase < allMethods[j].Camelcase
+	})
 	if err := tmpl.ExecuteTemplate(buf, "rpc_test", allMethods); err != nil {
 		return xerrors.Errorf("ExecuteTemplate 'rpc_test': %w", err)
 	}

@@ -62,6 +62,10 @@ type GetBlockTemplateReqTemplateRequest struct {
 //      "rulename" : n,                        (numeric) identifies the bit number as indicating acceptance and readiness for the named softfork rule
 //      ...
 //    },
+//    "capabilities" : [                       (json array)
+//      "str",                                 (string) A supported feature, for example 'proposal'
+//      ...
+//    ],
 //    "vbrequired" : n,                        (numeric) bit mask of versionbits the server requires set in submissions
 //    "previousblockhash" : "str",             (string) The hash of current highest block
 //    "transactions" : [                       (json array) contents of non-coinbase transactions that should be included in the next block
@@ -94,11 +98,12 @@ type GetBlockTemplateReqTemplateRequest struct {
 //    "noncerange" : "hex",                    (string) A range of valid nonces
 //    "sigoplimit" : n,                        (numeric) limit of sigops in blocks
 //    "sizelimit" : n,                         (numeric) limit of block size
-//    "weightlimit" : n,                       (numeric) limit of block weight
+//    "weightlimit" : n,                       (numeric, optional) limit of block weight
 //    "curtime" : xxx,                         (numeric) current timestamp in UNIX epoch time
 //    "bits" : "str",                          (string) compressed target of next block
 //    "height" : n,                            (numeric) The height of the next block
-//    "default_witness_commitment" : "str"     (string, optional) a valid witness commitment for the unmodified block template
+//    "signet_challenge" : "hex",              (string, optional) Only on signet
+//    "default_witness_commitment" : "hex"     (string, optional) a valid witness commitment for the unmodified block template
 //  }
 type GetBlockTemplateResp struct {
 	// According to BIP22
@@ -141,7 +146,12 @@ type GetBlockTemplateRespOtherwise struct {
 	Rules []string `json:"rules"`
 
 	// set of pending, supported versionbit (BIP 9) softfork deployments
+	// identifies the bit number as indicating acceptance and readiness for the named softfork rule
+	// Key: rulename, Value: n
 	VbAvailable map[string]float64 `json:"vbavailable"`
+
+	// Element: Str    A supported feature, for example 'proposal'
+	Capabilities []string `json:"capabilities"`
 
 	// bit mask of versionbits the server requires set in submissions
 	VbRequired float64 `json:"vbrequired"`
@@ -153,6 +163,8 @@ type GetBlockTemplateRespOtherwise struct {
 	Transactions []GetBlockTemplateRespOtherwiseTransactions `json:"transactions"`
 
 	// data that should be included in the coinbase's scriptSig content
+	// values must be in the coinbase (keys may be ignored)
+	// Key: key, Value: hex
 	CoinbaseAux map[string]string `json:"coinbaseaux"`
 
 	// maximum allowable input to coinbase transaction, including the generation award and transaction fees (in satoshis)
@@ -181,7 +193,7 @@ type GetBlockTemplateRespOtherwise struct {
 	SizeLimit float64 `json:"sizelimit"`
 
 	// limit of block weight
-	WeightLimit float64 `json:"weightlimit"`
+	WeightLimit *float64 `json:"weightlimit,omitempty"`
 
 	// current timestamp in UNIX epoch time
 	CurTime float64 `json:"curtime"`
@@ -191,6 +203,9 @@ type GetBlockTemplateRespOtherwise struct {
 
 	// The height of the next block
 	Height float64 `json:"height"`
+
+	// Only on signet
+	SignetChallenge string `json:"signet_challenge,omitempty"`
 
 	// a valid witness commitment for the unmodified block template
 	DefaultWitnessCommitment string `json:"default_witness_commitment,omitempty"`

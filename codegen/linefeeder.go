@@ -33,9 +33,29 @@ func (lf *LineFeeder) Text() string {
 	return lf.cache
 }
 
+func (lf *LineFeeder) Peek() string {
+	if lf.idx >= len(lf.ss) {
+		return ""
+	}
+	return lf.ss[lf.idx]
+}
+
 func (lf *LineFeeder) Rewind() {
 	lf.idx -= 1
-	lf.cache = lf.ss[lf.idx-1]
+	if lf.idx-1 >= 0 && lf.idx-1 < len(lf.ss) {
+		lf.cache = lf.ss[lf.idx-1]
+	}
+}
+
+func (lf *LineFeeder) RewindTo(idx int) {
+	lf.idx = idx
+	if lf.idx-1 >= 0 && lf.idx-1 < len(lf.ss) {
+		lf.cache = lf.ss[lf.idx-1]
+	}
+}
+
+func (lf *LineFeeder) At() int {
+	return lf.idx
 }
 
 func (lf *LineFeeder) Debug() string {

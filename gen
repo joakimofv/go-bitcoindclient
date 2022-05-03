@@ -3,7 +3,7 @@
 cd codegen
 go install
 cd -
-codegen
+codegen $@
 cd todofix
 go install
 cd -

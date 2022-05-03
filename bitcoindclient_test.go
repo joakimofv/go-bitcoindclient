@@ -123,6 +123,7 @@ func TestSomeRpc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var firstCall time.Time
 
 	for name, tc := range map[string]struct {
 		method   []string
@@ -164,7 +165,11 @@ func TestSomeRpc(t *testing.T) {
 					var err error
 					switch method {
 					case "Uptime":
-						time.Sleep(time.Second)
+						if firstCall.IsZero() {
+							bc.Uptime(ctx)
+							firstCall = time.Now()
+						}
+						time.Sleep(firstCall.Add(time.Second).Sub(time.Now()))
 						result, err = bc.Uptime(ctx)
 					case "CreateWallet":
 						result, err = bc.CreateWallet(ctx, tc.args[i].(CreateWalletReq))
@@ -184,6 +189,9 @@ func TestSomeRpc(t *testing.T) {
 						result, err = bc.ListAddressGroupings(UseUriPath(ctx, "/wallet/"+wallet))
 					default:
 						t.Fatal("missing case for " + method)
+					}
+					if firstCall.IsZero() {
+						firstCall = time.Now()
 					}
 
 					if err != nil {

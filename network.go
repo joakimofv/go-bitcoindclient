@@ -242,7 +242,7 @@ func (bc *BitcoindClient) GetNetTotals(ctx context.Context) (result GetNetTotals
 //    "networkactive" : true|false,                      (boolean) whether p2p networking is enabled
 //    "networks" : [                                     (json array) information per network
 //      {                                                (json object)
-//        "name" : "str",                                (string) network (ipv4, ipv6, onion, i2p)
+//        "name" : "str",                                (string) network (ipv4, ipv6, onion, i2p, cjdns)
 //        "limited" : true|false,                        (boolean) is the network limited using -onlynet?
 //        "reachable" : true|false,                      (boolean) is the network reachable?
 //        "proxy" : "str",                               (string) ("host:port") the proxy that is used for this network, or empty if none
@@ -314,7 +314,7 @@ type GetNetworkInfoResp struct {
 }
 
 type GetNetworkInfoRespNetworks struct {
-	// network (ipv4, ipv6, onion, i2p)
+	// network (ipv4, ipv6, onion, i2p, cjdns)
 	Name string `json:"name"`
 
 	// is the network limited using -onlynet?
@@ -354,13 +354,13 @@ func (bc *BitcoindClient) GetNetworkInfo(ctx context.Context) (result GetNetwork
 
 // GetNodeAddressesReq holds the arguments for the GetNodeAddresses call.
 //  1. count      (numeric, optional, default=1) The maximum number of addresses to return. Specify 0 to return all known addresses.
-//  2. network    (string, optional, default=all networks) Return only addresses of the specified network. Can be one of: ipv4, ipv6, onion, i2p.
+//  2. network    (string, optional, default=all networks) Return only addresses of the specified network. Can be one of: ipv4, ipv6, onion, i2p, cjdns.
 type GetNodeAddressesReq struct {
 	// The maximum number of addresses to return. Specify 0 to return all known addresses.
 	// Default: 1
 	Count *float64 `json:"count,omitempty"`
 
-	// Return only addresses of the specified network. Can be one of: ipv4, ipv6, onion, i2p.
+	// Return only addresses of the specified network. Can be one of: ipv4, ipv6, onion, i2p, cjdns.
 	// Default: all networks
 	Network string `json:"network,omitempty"`
 }
@@ -372,7 +372,7 @@ type GetNodeAddressesReq struct {
 //      "services" : n,       (numeric) The services offered by the node
 //      "address" : "str",    (string) The address of the node
 //      "port" : n,           (numeric) The port number of the node
-//      "network" : "str"     (string) The network (ipv4, ipv6, onion, i2p) the node connected through
+//      "network" : "str"     (string) The network (ipv4, ipv6, onion, i2p, cjdns) the node connected through
 //    },
 //    ...
 //  ]
@@ -409,12 +409,14 @@ type GetNodeAddressesRespElement struct {
 	// The port number of the node
 	Port float64 `json:"port"`
 
-	// The network (ipv4, ipv6, onion, i2p) the node connected through
+	// The network (ipv4, ipv6, onion, i2p, cjdns) the node connected through
 	Network string `json:"network"`
 }
 
 // GetNodeAddresses RPC method.
-// Return known addresses, which can potentially be used to find new nodes in the network.
+// Return known addresses, after filtering for quality and recency.
+// These can potentially be used to find new peers in the network.
+// The total number of addresses known to the node may be higher.
 func (bc *BitcoindClient) GetNodeAddresses(ctx context.Context, args GetNodeAddressesReq) (result GetNodeAddressesResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "getnodeaddresses", args); err != nil {
@@ -425,52 +427,55 @@ func (bc *BitcoindClient) GetNodeAddresses(ctx context.Context, args GetNodeAddr
 }
 
 // GetPeerInfoResp holds the response to the GetPeerInfo call.
-//  [                                     (json array)
-//    {                                   (json object)
-//      "id" : n,                         (numeric) Peer index
-//      "addr" : "str",                   (string) (host:port) The IP address and port of the peer
-//      "addrbind" : "str",               (string) (ip:port) Bind address of the connection to the peer
-//      "addrlocal" : "str",              (string) (ip:port) Local address as reported by the peer
-//      "network" : "str",                (string) Network (ipv4, ipv6, onion, i2p, not_publicly_routable)
-//      "mapped_as" : n,                  (numeric) The AS in the BGP route to the peer used for diversifying
-//                                        peer selection (only available if the asmap config flag is set)
-//      "services" : "hex",               (string) The services offered
-//      "servicesnames" : [               (json array) the services offered, in human-readable form
-//        "str",                          (string) the service name if it is recognised
+//  [                                         (json array)
+//    {                                       (json object)
+//      "id" : n,                             (numeric) Peer index
+//      "addr" : "str",                       (string) (host:port) The IP address and port of the peer
+//      "addrbind" : "str",                   (string, optional) (ip:port) Bind address of the connection to the peer
+//      "addrlocal" : "str",                  (string, optional) (ip:port) Local address as reported by the peer
+//      "network" : "str",                    (string) Network (ipv4, ipv6, onion, i2p, cjdns, not_publicly_routable)
+//      "mapped_as" : n,                      (numeric, optional) The AS in the BGP route to the peer used for diversifying
+//                                            peer selection (only available if the asmap config flag is set)
+//      "services" : "hex",                   (string) The services offered
+//      "servicesnames" : [                   (json array) the services offered, in human-readable form
+//        "str",                              (string) the service name if it is recognised
 //        ...
 //      ],
-//      "relaytxes" : true|false,         (boolean) Whether peer has asked us to relay transactions to it
-//      "lastsend" : xxx,                 (numeric) The UNIX epoch time of the last send
-//      "lastrecv" : xxx,                 (numeric) The UNIX epoch time of the last receive
-//      "last_transaction" : xxx,         (numeric) The UNIX epoch time of the last valid transaction received from this peer
-//      "last_block" : xxx,               (numeric) The UNIX epoch time of the last block received from this peer
-//      "bytessent" : n,                  (numeric) The total bytes sent
-//      "bytesrecv" : n,                  (numeric) The total bytes received
-//      "conntime" : xxx,                 (numeric) The UNIX epoch time of the connection
-//      "timeoffset" : n,                 (numeric) The time offset in seconds
-//      "pingtime" : n,                   (numeric) ping time (if available)
-//      "minping" : n,                    (numeric) minimum observed ping time (if any at all)
-//      "pingwait" : n,                   (numeric) ping wait (if non-zero)
-//      "version" : n,                    (numeric) The peer version, such as 70001
-//      "subver" : "str",                 (string) The string version
-//      "inbound" : true|false,           (boolean) Inbound (true) or Outbound (false)
-//      "bip152_hb_to" : true|false,      (boolean) Whether we selected peer as (compact blocks) high-bandwidth peer
-//      "bip152_hb_from" : true|false,    (boolean) Whether peer selected us as (compact blocks) high-bandwidth peer
-//      "startingheight" : n,             (numeric) The starting height (block) of the peer
-//      "synced_headers" : n,             (numeric) The last header we have in common with this peer
-//      "synced_blocks" : n,              (numeric) The last block we have in common with this peer
-//      "inflight" : [                    (json array)
-//        n,                              (numeric) The heights of blocks we're currently asking from this peer
+//      "relaytxes" : true|false,             (boolean) Whether peer has asked us to relay transactions to it
+//      "lastsend" : xxx,                     (numeric) The UNIX epoch time of the last send
+//      "lastrecv" : xxx,                     (numeric) The UNIX epoch time of the last receive
+//      "last_transaction" : xxx,             (numeric) The UNIX epoch time of the last valid transaction received from this peer
+//      "last_block" : xxx,                   (numeric) The UNIX epoch time of the last block received from this peer
+//      "bytessent" : n,                      (numeric) The total bytes sent
+//      "bytesrecv" : n,                      (numeric) The total bytes received
+//      "conntime" : xxx,                     (numeric) The UNIX epoch time of the connection
+//      "timeoffset" : n,                     (numeric) The time offset in seconds
+//      "pingtime" : n,                       (numeric, optional) ping time (if available)
+//      "minping" : n,                        (numeric, optional) minimum observed ping time (if any at all)
+//      "pingwait" : n,                       (numeric, optional) ping wait (if non-zero)
+//      "version" : n,                        (numeric) The peer version, such as 70001
+//      "subver" : "str",                     (string) The string version
+//      "inbound" : true|false,               (boolean) Inbound (true) or Outbound (false)
+//      "bip152_hb_to" : true|false,          (boolean) Whether we selected peer as (compact blocks) high-bandwidth peer
+//      "bip152_hb_from" : true|false,        (boolean) Whether peer selected us as (compact blocks) high-bandwidth peer
+//      "startingheight" : n,                 (numeric, optional) The starting height (block) of the peer
+//      "synced_headers" : n,                 (numeric, optional) The last header we have in common with this peer
+//      "synced_blocks" : n,                  (numeric, optional) The last block we have in common with this peer
+//      "inflight" : [                        (json array, optional)
+//        n,                                  (numeric) The heights of blocks we're currently asking from this peer
 //        ...
 //      ],
-//      "permissions" : [                 (json array) Any special permissions that have been granted to this peer
-//        "str",                          (string) bloomfilter (allow requesting BIP37 filtered blocks and transactions),
-//                                        noban (do not ban for misbehavior; implies download),
-//                                        forcerelay (relay transactions that are already in the mempool; implies relay),
-//                                        relay (relay even in -blocksonly mode, and unlimited transaction announcements),
-//                                        mempool (allow requesting BIP35 mempool contents),
-//                                        download (allow getheaders during IBD, no disconnect after maxuploadtarget limit),
-//                                        addr (responses to GETADDR avoid hitting the cache and contain random records with the most up-to-date info).
+//      "addr_relay_enabled" : true|false,    (boolean, optional) Whether we participate in address relay with this peer
+//      "addr_processed" : n,                 (numeric, optional) The total number of addresses processed, excluding those dropped due to rate limiting
+//      "addr_rate_limited" : n,              (numeric, optional) The total number of addresses dropped due to rate limiting
+//      "permissions" : [                     (json array) Any special permissions that have been granted to this peer
+//        "str",                              (string) bloomfilter (allow requesting BIP37 filtered blocks and transactions),
+//                                            noban (do not ban for misbehavior; implies download),
+//                                            forcerelay (relay transactions that are already in the mempool; implies relay),
+//                                            relay (relay even in -blocksonly mode, and unlimited transaction announcements),
+//                                            mempool (allow requesting BIP35 mempool contents),
+//                                            download (allow getheaders during IBD, no disconnect after maxuploadtarget limit),
+//                                            addr (responses to GETADDR avoid hitting the cache and contain random records with the most up-to-date info).
 type GetPeerInfoResp struct {
 	Array []GetPeerInfoRespElement
 }
@@ -499,17 +504,17 @@ type GetPeerInfoRespElement struct {
 	Addr string `json:"addr"`
 
 	// (ip:port) Bind address of the connection to the peer
-	AddrBind string `json:"addrbind"`
+	AddrBind string `json:"addrbind,omitempty"`
 
 	// (ip:port) Local address as reported by the peer
-	AddrLocal string `json:"addrlocal"`
+	AddrLocal string `json:"addrlocal,omitempty"`
 
-	// Network (ipv4, ipv6, onion, i2p, not_publicly_routable)
+	// Network (ipv4, ipv6, onion, i2p, cjdns, not_publicly_routable)
 	Network string `json:"network"`
 
 	// The AS in the BGP route to the peer used for diversifying
 	// peer selection (only available if the asmap config flag is set)
-	MappedAs float64 `json:"mapped_as"`
+	MappedAs *float64 `json:"mapped_as,omitempty"`
 
 	// The services offered
 	Services string `json:"services"`
@@ -546,13 +551,13 @@ type GetPeerInfoRespElement struct {
 	TimeOffset float64 `json:"timeoffset"`
 
 	// ping time (if available)
-	PingTime float64 `json:"pingtime"`
+	PingTime *float64 `json:"pingtime,omitempty"`
 
 	// minimum observed ping time (if any at all)
-	MinPing float64 `json:"minping"`
+	MinPing *float64 `json:"minping,omitempty"`
 
 	// ping wait (if non-zero)
-	PingWait float64 `json:"pingwait"`
+	PingWait *float64 `json:"pingwait,omitempty"`
 
 	// The peer version, such as 70001
 	Version float64 `json:"version"`
@@ -570,16 +575,25 @@ type GetPeerInfoRespElement struct {
 	BIP152HbFrom bool `json:"bip152_hb_from"`
 
 	// The starting height (block) of the peer
-	StartingHeight float64 `json:"startingheight"`
+	StartingHeight *float64 `json:"startingheight,omitempty"`
 
 	// The last header we have in common with this peer
-	SyncedHeaders float64 `json:"synced_headers"`
+	SyncedHeaders *float64 `json:"synced_headers,omitempty"`
 
 	// The last block we have in common with this peer
-	SyncedBlocks float64 `json:"synced_blocks"`
+	SyncedBlocks *float64 `json:"synced_blocks,omitempty"`
 
 	// Element: N    The heights of blocks we're currently asking from this peer
-	InFlight []float64 `json:"inflight"`
+	InFlight []float64 `json:"inflight,omitempty"`
+
+	// Whether we participate in address relay with this peer
+	AddrRelayEnabled *bool `json:"addr_relay_enabled,omitempty"`
+
+	// The total number of addresses processed, excluding those dropped due to rate limiting
+	AddrProcessed *float64 `json:"addr_processed,omitempty"`
+
+	// The total number of addresses dropped due to rate limiting
+	AddrRateLimited *float64 `json:"addr_rate_limited,omitempty"`
 
 	// Any special permissions that have been granted to this peer
 	// Element: Str    bloomfilter (allow requesting BIP37 filtered blocks and transactions),

@@ -205,18 +205,50 @@ type LoggingReq struct {
 	Exclude []string `json:"exclude,omitempty"`
 }
 
+// LoggingResp holds the response to the Logging call.
+//  {                             (json object) keys are the logging categories, and values indicates its status
+//    "category" : true|false,    (boolean) if being debug logged or not. false:inactive, true:active
+//    ...
+//  }
+type LoggingResp struct {
+	// keys are the logging categories, and values indicates its status
+	// if being debug logged or not. false:inactive, true:active
+	// Key: category, Value: true|false
+	Map map[string]bool
+}
+
+func (alts LoggingResp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(alts.Map)
+}
+
+func (alts *LoggingResp) UnmarshalJSON(b []byte) error {
+	reset := *alts
+	var decoder *json.Decoder
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.Map) == nil {
+		return nil
+	}
+	alts.Map = reset.Map
+	return &UnmarshalError{B: b, structName: "LoggingResp"}
+}
+
 // Logging RPC method.
 // Gets and sets the logging configuration.
 // When called without an argument, returns the list of categories with status that are currently being debug logged or not.
 // When called with arguments, adds or removes categories from debug logging and return the lists above.
 // The arguments are evaluated in order "include", "exclude".
 // If an item is both included and excluded, it will thus end up being excluded.
-// The valid logging categories are: net, tor, mempool, http, bench, zmq, walletdb, rpc, estimatefee, addrman, selectcoins, reindex, cmpctblock, rand, prune, proxy, mempoolrej, libevent, coindb, qt, leveldb, validation, i2p, ipc
+// The valid logging categories are: addrman, bench, blockstorage, cmpctblock, coindb, estimatefee, http, i2p, ipc, leveldb, libevent, mempool, mempoolrej, net, proxy, prune, qt, rand, reindex, rpc, selectcoins, tor, util, validation, walletdb, zmq
 // In addition, the following are available as category names with special meanings:
 //   - "all",  "1" : represent all logging categories.
 //   - "none", "0" : even if other logging categories are specified, ignore all of them.
-func (bc *BitcoindClient) Logging(ctx context.Context, args LoggingReq) (err error) {
-	_, err = bc.sendRequest(ctx, "logging", args)
+func (bc *BitcoindClient) Logging(ctx context.Context, args LoggingReq) (result LoggingResp, err error) {
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "logging", args); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
 	return
 }
 

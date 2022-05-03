@@ -27,7 +27,7 @@ var reArgumentStructBegin = regexp.MustCompile(`^\s*\{`)
 
 //        "descriptor",             (string) An output descriptor
 // vout_index,                  (numeric) The zero-based output index, before a change output is added.
-var reSingleMember = regexp.MustCompile(`^\s*"?([^",]*)"?,\s+\(([^\),]+)(?:|, required)\)\s*(.*)`)
+var reSingleMember = regexp.MustCompile(`^\s*"?([^",]*)"?,\s+\(([^\),]+)(?:|, required|, optional)(?:|, default=([^\)]*))\)\s*(.*)`)
 
 //        {                         (json object) An object with output descriptor and metadata
 var reAnonymousStructStart = regexp.MustCompile(`^\s*\{\s*\(json object[^\)]*\)\s*(.*)`)
@@ -38,7 +38,7 @@ var reAnonymousStructStart = regexp.MustCompile(`^\s*\{\s*\(json object[^\)]*\)\
 //  "nextblockhash" : "hex"         (string, optional) The hash of the next block (if available)
 //  "in_active_chain" : true|false,    (boolean) Whether specified block is in the active chain or not (only present with explicit "blockhash" argument)
 //          "range": n or [n,n],    (numeric or array, optional, default=1000) Up to what index HD chains should be explored (either end or [begin,end])
-var reStructMemberBasic = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*[^\[\{\(\s][^\(]*\(([^\),]+)(?:|, ([a-z]+)(?:|, default=([^\)]*)))\)\s*(.*)`)
+var reStructMemberBasic = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*([^\[\{\(\s][^\(]*)\(([^\),]+)(?:|, ([a-z]+)(?:|, default=([^\)]*)))\)\s*(.*)`)
 
 //        },
 var reStructEnd = regexp.MustCompile(`^\s*\}`)
@@ -59,7 +59,8 @@ var reAlternative = regexp.MustCompile(`^` + alternativeMarker + `(.+)`)
 var reSingle = regexp.MustCompile(`^\s*(?:"([^",]*)"|([^"\s\{\[]+))\s+\(([^\),]+)\)\s*(.*)`)
 
 //null    (json null)
-var reEmpty = regexp.MustCompile(`^\s*null\s*\(json null\)`)
+//{}    (empty JSON object)
+var reEmpty = regexp.MustCompile(`^\s*(?:null|{})\s*\((?:json null|empty JSON object)\)`)
 
 //{                                 (json object)
 //reAnonymousStructStart
@@ -107,6 +108,7 @@ type structInfo struct {
 	ReplaceByMember bool
 	Anonymous       bool // Aka inline struct.
 	ArrayLevel      int
+	ArrayComment    string
 	NilIsFalse      bool
 }
 
@@ -127,11 +129,12 @@ type basicTypeInfo struct {
 }
 
 type memberInfo struct {
-	JsonName string
-	Name     string
-	Optional bool
-	Comment  string
-	Default  string
+	JsonName  string
+	Name      string
+	ValueName string
+	Optional  bool
+	Comment   string
+	Default   string
 
 	// It can be either a basic type, a struct or an array (of the basic type or struct).
 	ArrayLevel int
@@ -255,23 +258,43 @@ func (s *structInfo) buildResultStruct(lf *LineFeeder) {
 			order = append(order, "basic")
 		} else if m = reAnonymousStructStart.FindStringSubmatch(lf.Text()); len(m) == 2 {
 			comment := appendComments(m[1], continuedComment(lf))
-			subStruct := buildStruct(structTypeName, comment, lf)
+			lfIdx := lf.At()
+			typePrefix := structTypeName
+			subStruct := buildStruct(typePrefix, comment, lf)
+			if structTypeName == s.TypeName {
+				// May need to adjust the type name.
+				// Is it a map?
+				if subStruct.MapKeyType != "" {
+					lf.RewindTo(lfIdx)
+					typePrefix += "Element"
+					if char > 'A' {
+						typePrefix += string([]byte{char})
+					}
+					char++
+					subStruct = buildStruct(typePrefix, comment, lf)
+				}
+			}
 			structs = append(structs, subStruct)
 			order = append(order, "struct")
 		} else if m = reAnonymousArrayStart.FindStringSubmatch(lf.Text()); len(m) == 2 {
 			comment := appendComments(m[1], continuedComment(lf))
-			typePrefix := structTypeName + "Element"
-			if char > 'A' {
-				typePrefix += string([]byte{char})
+			typePrefix := structTypeName
+			if structTypeName == s.TypeName {
+				// Need to adjust the type name.
+				typePrefix += "Element"
+				if char > 'A' {
+					typePrefix += string([]byte{char})
+				}
+				char++
 			}
 			basicType, subStruct := buildArray(typePrefix, lf)
-			char++
 			if !reflect.ValueOf(basicType).IsZero() {
+				char--
 				basicType.Comment = appendComments(comment, basicType.Comment)
 				basicTypes = append(basicTypes, basicType)
 				order = append(order, "basic")
 			} else if !reflect.ValueOf(subStruct).IsZero() {
-				subStruct.Comment = appendComments(comment, subStruct.Comment)
+				subStruct.ArrayComment = comment
 				structs = append(structs, subStruct)
 				order = append(order, "struct")
 			} else {
@@ -282,7 +305,7 @@ func (s *structInfo) buildResultStruct(lf *LineFeeder) {
 		}
 	}
 
-	if len(basicTypes) == 0 && len(structs) == 1 && structs[0].ArrayLevel == 0 {
+	if len(basicTypes) == 0 && len(structs) == 1 && structs[0].ArrayLevel == 0 && structs[0].MapKeyType == "" {
 		// Use the substruct as the main struct, but keep the name.
 		structs[0].TypeName = s.TypeName
 		*s = structs[0]
@@ -304,14 +327,15 @@ func (s *structInfo) buildResultStruct(lf *LineFeeder) {
 		} else {
 			subStruct := structs[0]
 			structs = structs[1:]
-			if subStruct.ArrayLevel == 0 {
-				// Would like to do this, but can't since some structs need to be borrowed by other Resps
-				// (those crossreferences are done by todofix after codegen has finished).
-				//subStruct.Anonymous = true
+			name := strings.TrimPrefix(subStruct.TypeName, s.TypeName)
+			if subStruct.ArrayLevel > 0 {
+				name = strings.Replace(name, "Element", "Array", 1)
+			} else if subStruct.MapKeyType != "" {
+				name = strings.Replace(name, "Element", "Map", 1)
 			}
 			s.Members = append(s.Members, memberInfo{
-				Name:       strings.Replace(strings.TrimPrefix(subStruct.TypeName, s.TypeName), "Element", "Array", 1),
-				Comment:    subStruct.Comment,
+				Name:       name,
+				Comment:    subStruct.ArrayComment,
 				Struct:     subStruct,
 				ArrayLevel: subStruct.ArrayLevel,
 			})
@@ -430,7 +454,7 @@ func buildArray(typePrefix string, lf *LineFeeder) (basicTypeInfo, structInfo) {
 			break
 		}
 		// It's either a single member, an anonymous struct, or another level of array.
-		if m := reSingleMember.FindStringSubmatch(lf.Text()); len(m) == 4 {
+		if m := reSingleMember.FindStringSubmatch(lf.Text()); len(m) == 5 {
 			typeName := golangifyType(m[2])
 			if typeName == "" {
 				panic(lf.Debug())
@@ -443,7 +467,7 @@ func buildArray(typePrefix string, lf *LineFeeder) (basicTypeInfo, structInfo) {
 			basicTypes = append(basicTypes, basicTypeInfo{
 				Name:       name,
 				TypeName:   typeName,
-				Comment:    appendComments(m[3], continuedComment(lf)),
+				Comment:    appendComments(m[4], continuedComment(lf), defaultComment(m[3])),
 				JsonName:   m[1],
 				ArrayLevel: 1,
 			})
@@ -543,7 +567,6 @@ func buildArray(typePrefix string, lf *LineFeeder) (basicTypeInfo, structInfo) {
 			}
 			holderStruct.Members = append(holderStruct.Members, memberInfo{
 				Name:       strings.TrimPrefix(s.TypeName, typePrefix),
-				Comment:    s.Comment,
 				Struct:     s,
 				ArrayLevel: s.ArrayLevel,
 			})
@@ -618,22 +641,24 @@ func buildStruct(typePrefix string, comment string, lf *LineFeeder) structInfo {
 
 	// Entering this function, we have walked past the initial "{" and comments,
 	// so the members should start from the first line we scan.
+	prevMemberIsMap := false
 	for lf.Scan() {
-		if reStructEnd.MatchString(lf.Text()) {
+		if reStructEnd.MatchString(lf.Text()) && !prevMemberIsMap {
 			break
 		}
 		// It's either a basic member, a struct member or an array member.
-		if m := reStructMemberBasic.FindStringSubmatch(lf.Text()); len(m) == 6 {
-			typeName := golangifyType(m[2])
+		if m := reStructMemberBasic.FindStringSubmatch(lf.Text()); len(m) == 7 {
+			typeName := golangifyType(m[3])
 			if typeName == "" {
 				panic(lf.Debug())
 			}
 			member := memberInfo{
 				JsonName:  m[1],
 				Name:      camelCase(m[1]),
-				Optional:  m[3] == "optional",
-				Comment:   appendComments(m[5], continuedComment(lf), defaultComment(m[4])),
-				Default:   m[4],
+				ValueName: strings.Trim(m[2], `", `),
+				Optional:  m[4] == "optional",
+				Comment:   appendComments(m[6], continuedComment(lf), defaultComment(m[5])),
+				Default:   m[5],
 				BasicType: typeName,
 			}
 			member.Name = uniqueMemberName(member.Name)
@@ -645,7 +670,16 @@ func buildStruct(typePrefix string, comment string, lf *LineFeeder) structInfo {
 				Optional: m[2] == "optional",
 				Comment:  appendComments(m[3], continuedComment(lf)),
 			}
+			lfIdx := lf.At()
 			member.Struct = buildStruct(typePrefix+member.Name, "", lf)
+			// Look ahead to see if this struct should be replaced with a map.
+			if reArrayDeadSpace.MatchString(lf.Peek()) ||
+				(reStructEnd.MatchString(lf.Peek()) && member.JsonName == "xxxx") {
+				prevMemberIsMap = true
+				// Don't use the member name in the type (might be nonsense like "xxxx").
+				lf.RewindTo(lfIdx)
+				member.Struct = buildStruct(typePrefix, "", lf)
+			}
 			// Special handling of nasty cases where the type might be different.
 			if reMayBeFalse.MatchString(member.Comment) {
 				member.Optional = true
@@ -676,7 +710,8 @@ func buildStruct(typePrefix string, comment string, lf *LineFeeder) structInfo {
 				Comment: appendComments(m[1], continuedComment(lf)),
 			}
 			s.Members = append(s.Members, member)
-		} else if reArrayDeadSpace.MatchString(lf.Text()) {
+		} else if reArrayDeadSpace.MatchString(lf.Text()) || prevMemberIsMap {
+			prevMemberIsMap = false
 			// How can there be "..." in a struct? Only if it is in fact a dict of key-value pairs.
 			// Then we'll remake it into a map, using the only member as the value definition.
 			// There must be one previous member: The "key-value pair" definition.
@@ -710,19 +745,58 @@ func buildStruct(typePrefix string, comment string, lf *LineFeeder) structInfo {
 					Comment:  member.Struct.Comment,
 					Members:  member.Struct.Members,
 				}
+				member.ValueName = "struct"
 			}
-			// There may not be any more lines.
-			lf.Scan()
-			if !reStructEnd.MatchString(lf.Text()) {
-				panic(lf.Debug())
-			}
-			lf.Rewind()
 
 			// Delete the member and instead use the structInfo to represent the map.
 			s.Members = nil
-			s.Comment = appendComments(s.Comment, member.Comment)
+			s.Comment = appendComments(s.Comment, member.Comment, "Key: "+member.JsonName+", Value: "+member.ValueName)
+
+			// There may not be any more lines.
+			if reStructEnd.MatchString(lf.Text()) {
+				break
+			}
+			if !reStructEnd.MatchString(lf.Peek()) {
+				panic(lf.Debug())
+			}
 		} else {
 			panic(lf.Debug())
+		}
+	}
+	// Having duplicate JsonNames is faulty on part of bitcoind, but it started happening in v23 in an unimportant place.
+	// Workaround by deleting duplicates.
+	jsonNames := make(map[string]int)
+	for i := 0; i < len(s.Members); i++ {
+		member := s.Members[i]
+		if oldIdx, ok := jsonNames[member.JsonName]; ok {
+			// Choose which one to keep.
+			idxToDelete, idxToKeep := i, oldIdx
+			if s.Members[idxToDelete].Comment != "" && s.Members[idxToKeep].Comment == "" {
+				idxToDelete, idxToKeep = idxToKeep, idxToDelete
+				goto DELETE
+			}
+			if s.Members[idxToKeep].Comment != "" && s.Members[idxToDelete].Comment == "" {
+				goto DELETE
+			}
+			// These criteria are enough for now, add more if needed. 'go vet' will alert about duplicate tags.
+		DELETE:
+			if len(s.Members[idxToKeep].Name) > len(s.Members[idxToDelete].Name) {
+				s.Members[idxToKeep].Name = s.Members[idxToDelete].Name
+			}
+			jsonNames[member.JsonName] = idxToKeep
+			for k := idxToDelete; k < len(s.Members); k++ {
+				if k+1 == len(s.Members) {
+					s.Members = s.Members[:k]
+					break
+				}
+				s.Members[k] = s.Members[k+1]
+				if _, ok := jsonNames[s.Members[k].JsonName]; ok {
+					jsonNames[s.Members[k].JsonName] = k
+				}
+			}
+			i--
+		} else {
+			jsonNames[member.JsonName] = i
 		}
 	}
 	return s
@@ -776,6 +850,10 @@ func (s structInfo) presentMembers(indentLevel int) (output string, otherDefinit
 			}
 			output += indent + "// " + strings.ReplaceAll(member.Comment, "\n", "\n"+indent+"// ") + "\n"
 		}
+		if member.Struct.Comment != "" && (member.Struct.MapKeyType != "" || member.Struct.Anonymous) {
+			output += indent + "// " + strings.ReplaceAll(member.Struct.Comment, "\n", "\n"+indent+"// ") + "\n"
+		}
+
 		output += indent + member.Name + " "
 		if member.ArrayLevel > 0 {
 			for n := 0; n < member.ArrayLevel; n++ {
@@ -808,8 +886,10 @@ func (s structInfo) presentMembers(indentLevel int) (output string, otherDefinit
 			output += member.BasicType
 		} else if !reflect.ValueOf(member.Struct).IsZero() {
 			// Either:
+			// // Structcomment
 			// Name map[MapKeyType]MapValueType `json:"JsonName"`
 			// Or:
+			// // Structcomment
 			// Name struct {
 			//		...
 			// } `json:"JsonName"`

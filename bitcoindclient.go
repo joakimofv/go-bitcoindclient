@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MAJOR_VERSION               = 22
+	MAJOR_VERSION               = 23
 	DefaultSubChannelBufferSize = 2
 	DefaultRpcUriPath           = "/"
 )

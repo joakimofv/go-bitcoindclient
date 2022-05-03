@@ -45,12 +45,12 @@ func (bc *BitcoindClient) GetBestBlockhash(ctx context.Context) (result GetBestB
 
 // GetBlockReq holds the arguments for the GetBlock call.
 //  1. blockhash    (string, required) The block hash
-//  2. verbosity    (numeric, optional, default=1) 0 for hex-encoded data, 1 for a json object, and 2 for json object with transaction data
+//  2. verbosity    (numeric, optional, default=1) 0 for hex-encoded data, 1 for a JSON object, 2 for JSON object with transaction data, and 3 for JSON object with transaction data including prevout information for inputs
 type GetBlockReq struct {
 	// The block hash
 	Blockhash string `json:"blockhash"`
 
-	// 0 for hex-encoded data, 1 for a json object, and 2 for json object with transaction data
+	// 0 for hex-encoded data, 1 for a JSON object, 2 for JSON object with transaction data, and 3 for JSON object with transaction data including prevout information for inputs
 	// Default: 1
 	Verbosity *float64 `json:"verbosity,omitempty"`
 }
@@ -97,6 +97,33 @@ type GetBlockReq struct {
 //      ...
 //    ]
 //  }
+//
+// ALTERNATIVE (for verbosity = 3)
+//  {                                        (json object)
+//    ...,                                   Same output as verbosity = 2
+//    "tx" : [                               (json array)
+//      {                                    (json object)
+//        "vin" : [                          (json array)
+//          {                                (json object)
+//            ...,                           The same output as verbosity = 2
+//            "prevout" : {                  (json object) (Only if undo information is available)
+//              "generated" : true|false,    (boolean) Coinbase or not
+//              "height" : n,                (numeric) The height of the prevout
+//              "value" : n,                 (numeric) The value in BTC
+//              "scriptPubKey" : {           (json object)
+//                "asm" : "str",             (string) The asm
+//                "hex" : "str",             (string) The hex
+//                "address" : "str",         (string, optional) The Bitcoin address (only if a well-defined address exists)
+//                "type" : "str"             (string) The type (one of: nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata, witness_v0_scripthash, witness_v0_keyhash, witness_v1_taproot, witness_unknown)
+//              }
+//            }
+//          },
+//          ...
+//        ]
+//      },
+//      ...
+//    ]
+//  }
 type GetBlockResp struct {
 	// A string that is serialized, hex-encoded data for block 'hash'
 	Hex string
@@ -104,6 +131,8 @@ type GetBlockResp struct {
 	ForVerbosityEquals1 GetBlockRespForVerbosityEquals1
 
 	ForVerbosityEquals2 GetBlockRespForVerbosityEquals2
+
+	ForVerbosityEquals3 GetBlockRespForVerbosityEquals3
 }
 
 func (alts GetBlockResp) MarshalJSON() ([]byte, error) {
@@ -113,7 +142,10 @@ func (alts GetBlockResp) MarshalJSON() ([]byte, error) {
 	if !reflect.ValueOf(alts.ForVerbosityEquals1).IsZero() {
 		return json.Marshal(alts.ForVerbosityEquals1)
 	}
-	return json.Marshal(alts.ForVerbosityEquals2)
+	if !reflect.ValueOf(alts.ForVerbosityEquals2).IsZero() {
+		return json.Marshal(alts.ForVerbosityEquals2)
+	}
+	return json.Marshal(alts.ForVerbosityEquals3)
 }
 
 func (alts *GetBlockResp) UnmarshalJSON(b []byte) error {
@@ -137,6 +169,12 @@ func (alts *GetBlockResp) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	alts.ForVerbosityEquals2 = reset.ForVerbosityEquals2
+	decoder = json.NewDecoder(bytes.NewReader(b))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&alts.ForVerbosityEquals3) == nil {
+		return nil
+	}
+	alts.ForVerbosityEquals3 = reset.ForVerbosityEquals3
 	return &UnmarshalError{B: b, structName: "GetBlockResp"}
 }
 
@@ -215,10 +253,53 @@ type GetBlockRespForVerbosityEquals2Tx struct {
 	Fee float64 `json:"fee"`
 }
 
+type GetBlockRespForVerbosityEquals3 struct {
+	// Same output as verbosity = 2
+	GetBlockRespForVerbosityEquals2
+
+	Tx []GetBlockRespForVerbosityEquals3Tx `json:"tx"`
+}
+
+type GetBlockRespForVerbosityEquals3Tx struct {
+	Vin []GetBlockRespForVerbosityEquals3TxVin `json:"vin"`
+}
+
+type GetBlockRespForVerbosityEquals3TxVin struct {
+	// The same output as verbosity = 2
+	GetBlockRespForVerbosityEquals2Tx
+
+	// (Only if undo information is available)
+	PrevOut struct {
+		// Coinbase or not
+		Generated bool `json:"generated"`
+
+		// The height of the prevout
+		Height float64 `json:"height"`
+
+		// The value in BTC
+		Value float64 `json:"value"`
+
+		ScriptPubkey struct {
+			// The asm
+			Asm string `json:"asm"`
+
+			// The hex
+			Hex string `json:"hex"`
+
+			// The Bitcoin address (only if a well-defined address exists)
+			Address string `json:"address,omitempty"`
+
+			// The type (one of: nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata, witness_v0_scripthash, witness_v0_keyhash, witness_v1_taproot, witness_unknown)
+			Type string `json:"type"`
+		} `json:"scriptPubKey"`
+	} `json:"prevout"`
+}
+
 // GetBlock RPC method.
 // If verbosity is 0, returns a string that is serialized, hex-encoded data for block 'hash'.
 // If verbosity is 1, returns an Object with information about block <hash>.
 // If verbosity is 2, returns an Object with information about block <hash> and information about each transaction.
+// If verbosity is 3, returns an Object with information about block <hash> and information about each transaction, including prevout information for inputs (only for unpruned blocks in the current best chain).
 func (bc *BitcoindClient) GetBlock(ctx context.Context, args GetBlockReq) (result GetBlockResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "getblock", args); err != nil {
@@ -235,35 +316,38 @@ func (bc *BitcoindClient) GetBlock(ctx context.Context, args GetBlockReq) (resul
 //    "headers" : n,                          (numeric) the current number of headers we have validated
 //    "bestblockhash" : "str",                (string) the hash of the currently best block
 //    "difficulty" : n,                       (numeric) the current difficulty
-//    "mediantime" : n,                       (numeric) median time for the current best block
+//    "time" : xxx,                           (numeric) The block time expressed in UNIX epoch time
+//    "mediantime" : xxx,                     (numeric) The median block time expressed in UNIX epoch time
 //    "verificationprogress" : n,             (numeric) estimate of verification progress [0..1]
 //    "initialblockdownload" : true|false,    (boolean) (debug information) estimate of whether this node is in Initial Block Download mode
 //    "chainwork" : "hex",                    (string) total amount of work in active chain, in hexadecimal
 //    "size_on_disk" : n,                     (numeric) the estimated size of the block and undo files on disk
 //    "pruned" : true|false,                  (boolean) if the blocks are subject to pruning
-//    "pruneheight" : n,                      (numeric) lowest-height complete block stored (only present if pruning is enabled)
-//    "automatic_pruning" : true|false,       (boolean) whether automatic pruning is enabled (only present if pruning is enabled)
-//    "prune_target_size" : n,                (numeric) the target size used by pruning (only present if automatic pruning is enabled)
-//    "softforks" : {                         (json object) status of softforks
+//    "pruneheight" : n,                      (numeric, optional) lowest-height complete block stored (only present if pruning is enabled)
+//    "automatic_pruning" : true|false,       (boolean, optional) whether automatic pruning is enabled (only present if pruning is enabled)
+//    "prune_target_size" : n,                (numeric, optional) the target size used by pruning (only present if automatic pruning is enabled)
+//    "softforks" : {                         (json object) (DEPRECATED, returned only if config option -deprecatedrpc=softforks is passed) status of softforks
 //      "xxxx" : {                            (json object) name of the softfork
 //        "type" : "str",                     (string) one of "buried", "bip9"
-//        "bip9" : {                          (json object) status of bip9 softforks (only for "bip9" type)
-//          "status" : "str",                 (string) one of "defined", "started", "locked_in", "active", "failed"
-//          "bit" : n,                        (numeric) the bit (0-28) in the block version field used to signal this softfork (only for "started" status)
+//        "height" : n,                       (numeric, optional) height of the first block which the rules are or will be enforced (only for "buried" type, or "bip9" type with "active" status)
+//        "active" : true|false,              (boolean) true if the rules are enforced for the mempool and the next block
+//        "bip9" : {                          (json object, optional) status of bip9 softforks (only for "bip9" type)
+//          "bit" : n,                        (numeric, optional) the bit (0-28) in the block version field used to signal this softfork (only for "started" and "locked_in" status)
 //          "start_time" : xxx,               (numeric) the minimum median time past of a block at which the bit gains its meaning
 //          "timeout" : xxx,                  (numeric) the median time past of a block at which the deployment is considered failed if not yet locked in
-//          "since" : n,                      (numeric) height of the first block to which the status applies
 //          "min_activation_height" : n,      (numeric) minimum height of blocks for which the rules may be enforced
-//          "statistics" : {                  (json object) numeric statistics about BIP9 signalling for a softfork (only for "started" status)
-//            "period" : n,                   (numeric) the length in blocks of the BIP9 signalling period
-//            "threshold" : n,                (numeric) the number of blocks with the version bit set required to activate the feature
+//          "status" : "str",                 (string) status of deployment at specified block (one of "defined", "started", "locked_in", "active", "failed")
+//          "since" : n,                      (numeric) height of the first block to which the status applies
+//          "status_next" : "str",            (string) status of deployment at the next block
+//          "statistics" : {                  (json object, optional) numeric statistics about signalling for a softfork (only for "started" and "locked_in" status)
+//            "period" : n,                   (numeric) the length in blocks of the signalling period
+//            "threshold" : n,                (numeric, optional) the number of blocks with the version bit set required to activate the feature (only for "started" status)
 //            "elapsed" : n,                  (numeric) the number of blocks elapsed since the beginning of the current period
 //            "count" : n,                    (numeric) the number of blocks with the version bit set in the current period
-//            "possible" : true|false         (boolean) returns false if there are not enough blocks left in this period to pass activation threshold
-//          }
-//        },
-//        "height" : n,                       (numeric) height of the first block which the rules are or will be enforced (only for "buried" type, or "bip9" type with "active" status)
-//        "active" : true|false               (boolean) true if the rules are enforced for the mempool and the next block
+//            "possible" : true|false         (boolean, optional) returns false if there are not enough blocks left in this period to pass activation threshold (only for "started" status)
+//          },
+//          "signalling" : "str"              (string) indicates blocks that signalled with a # and blocks that did not with a -
+//        }
 //      },
 //      ...
 //    },
@@ -285,7 +369,10 @@ type GetBlockchainInfoResp struct {
 	// the current difficulty
 	Difficulty float64 `json:"difficulty"`
 
-	// median time for the current best block
+	// The block time expressed in UNIX epoch time
+	Time float64 `json:"time"`
+
+	// The median block time expressed in UNIX epoch time
 	MedianTime float64 `json:"mediantime"`
 
 	// estimate of verification progress [0..1]
@@ -304,69 +391,81 @@ type GetBlockchainInfoResp struct {
 	Pruned bool `json:"pruned"`
 
 	// lowest-height complete block stored (only present if pruning is enabled)
-	PruneHeight float64 `json:"pruneheight"`
+	PruneHeight *float64 `json:"pruneheight,omitempty"`
 
 	// whether automatic pruning is enabled (only present if pruning is enabled)
-	AutomaticPruning bool `json:"automatic_pruning"`
+	AutomaticPruning *bool `json:"automatic_pruning,omitempty"`
 
 	// the target size used by pruning (only present if automatic pruning is enabled)
-	PruneTargetSize float64 `json:"prune_target_size"`
+	PruneTargetSize *float64 `json:"prune_target_size,omitempty"`
 
-	// status of softforks
-	SoftForks map[string]GetBlockchainInfoRespSoftForksXXXX `json:"softforks"`
+	// (DEPRECATED, returned only if config option -deprecatedrpc=softforks is passed) status of softforks
+	// name of the softfork
+	// Key: xxxx, Value: struct
+	SoftForks map[string]GetBlockchainInfoRespSoftForks `json:"softforks"`
 
 	// any network and blockchain warnings
 	Warnings string `json:"warnings"`
 }
 
-type GetBlockchainInfoRespSoftForksXXXX struct {
+type GetBlockchainInfoRespSoftForks struct {
 	// one of "buried", "bip9"
 	Type string `json:"type"`
 
-	// status of bip9 softforks (only for "bip9" type)
-	BIP9 struct {
-		// one of "defined", "started", "locked_in", "active", "failed"
-		Status string `json:"status"`
-
-		// the bit (0-28) in the block version field used to signal this softfork (only for "started" status)
-		Bit float64 `json:"bit"`
-
-		// the minimum median time past of a block at which the bit gains its meaning
-		StartTime float64 `json:"start_time"`
-
-		// the median time past of a block at which the deployment is considered failed if not yet locked in
-		TimeOut float64 `json:"timeout"`
-
-		// height of the first block to which the status applies
-		Since float64 `json:"since"`
-
-		// minimum height of blocks for which the rules may be enforced
-		MinActivationHeight float64 `json:"min_activation_height"`
-
-		// numeric statistics about BIP9 signalling for a softfork (only for "started" status)
-		Statistics struct {
-			// the length in blocks of the BIP9 signalling period
-			Period float64 `json:"period"`
-
-			// the number of blocks with the version bit set required to activate the feature
-			Threshold float64 `json:"threshold"`
-
-			// the number of blocks elapsed since the beginning of the current period
-			Elapsed float64 `json:"elapsed"`
-
-			// the number of blocks with the version bit set in the current period
-			Count float64 `json:"count"`
-
-			// returns false if there are not enough blocks left in this period to pass activation threshold
-			Possible bool `json:"possible"`
-		} `json:"statistics"`
-	} `json:"bip9"`
-
 	// height of the first block which the rules are or will be enforced (only for "buried" type, or "bip9" type with "active" status)
-	Height float64 `json:"height"`
+	Height *float64 `json:"height,omitempty"`
 
 	// true if the rules are enforced for the mempool and the next block
 	Active bool `json:"active"`
+
+	// status of bip9 softforks (only for "bip9" type)
+	BIP9 *GetBlockchainInfoRespSoftForksBIP9 `json:"bip9,omitempty"`
+}
+
+type GetBlockchainInfoRespSoftForksBIP9 struct {
+	// the bit (0-28) in the block version field used to signal this softfork (only for "started" and "locked_in" status)
+	Bit *float64 `json:"bit,omitempty"`
+
+	// the minimum median time past of a block at which the bit gains its meaning
+	StartTime float64 `json:"start_time"`
+
+	// the median time past of a block at which the deployment is considered failed if not yet locked in
+	TimeOut float64 `json:"timeout"`
+
+	// minimum height of blocks for which the rules may be enforced
+	MinActivationHeight float64 `json:"min_activation_height"`
+
+	// status of deployment at specified block (one of "defined", "started", "locked_in", "active", "failed")
+	Status string `json:"status"`
+
+	// height of the first block to which the status applies
+	Since float64 `json:"since"`
+
+	// status of deployment at the next block
+	StatusNext string `json:"status_next"`
+
+	// numeric statistics about signalling for a softfork (only for "started" and "locked_in" status)
+	Statistics *GetBlockchainInfoRespSoftForksBIP9Statistics `json:"statistics,omitempty"`
+
+	// indicates blocks that signalled with a # and blocks that did not with a -
+	Signalling string `json:"signalling"`
+}
+
+type GetBlockchainInfoRespSoftForksBIP9Statistics struct {
+	// the length in blocks of the signalling period
+	Period float64 `json:"period"`
+
+	// the number of blocks with the version bit set required to activate the feature (only for "started" status)
+	Threshold *float64 `json:"threshold,omitempty"`
+
+	// the number of blocks elapsed since the beginning of the current period
+	Elapsed float64 `json:"elapsed"`
+
+	// the number of blocks with the version bit set in the current period
+	Count float64 `json:"count"`
+
+	// returns false if there are not enough blocks left in this period to pass activation threshold (only for "started" status)
+	Possible *bool `json:"possible,omitempty"`
 }
 
 // GetBlockchainInfo RPC method.
@@ -448,6 +547,27 @@ func (bc *BitcoindClient) GetBlockFilter(ctx context.Context, args GetBlockFilte
 		return
 	}
 	err = json.Unmarshal(resultRaw, &result)
+	return
+}
+
+// GetBlockFromPeerReq holds the arguments for the GetBlockFromPeer call.
+//  1. blockhash    (string, required) The block hash to try to fetch
+//  2. peer_id      (numeric, required) The peer to fetch it from (see getpeerinfo for peer IDs)
+type GetBlockFromPeerReq struct {
+	// The block hash to try to fetch
+	Blockhash string `json:"blockhash"`
+
+	// The peer to fetch it from (see getpeerinfo for peer IDs)
+	PeerID float64 `json:"peer_id"`
+}
+
+// GetBlockFromPeer RPC method.
+// Attempt to fetch block from a given peer.
+// We must have the header for this block, e.g. using submitheader.
+// Subsequent calls for the same block and a new peer will cause the response from the previous peer to be ignored.
+// Returns an empty JSON object if the request was successfully scheduled.
+func (bc *BitcoindClient) GetBlockFromPeer(ctx context.Context, args GetBlockFromPeerReq) (err error) {
+	_, err = bc.sendRequest(ctx, "getblockfrompeer", args)
 	return
 }
 
@@ -639,54 +759,54 @@ type GetBlockStatsReq struct {
 
 // GetBlockStatsResp holds the response to the GetBlockStats call.
 //  {                              (json object)
-//    "avgfee" : n,                (numeric) Average fee in the block
-//    "avgfeerate" : n,            (numeric) Average feerate (in satoshis per virtual byte)
-//    "avgtxsize" : n,             (numeric) Average transaction size
-//    "blockhash" : "hex",         (string) The block hash (to check for potential reorgs)
-//    "feerate_percentiles" : [    (json array) Feerates at the 10th, 25th, 50th, 75th, and 90th percentile weight unit (in satoshis per virtual byte)
+//    "avgfee" : n,                (numeric, optional) Average fee in the block
+//    "avgfeerate" : n,            (numeric, optional) Average feerate (in satoshis per virtual byte)
+//    "avgtxsize" : n,             (numeric, optional) Average transaction size
+//    "blockhash" : "hex",         (string, optional) The block hash (to check for potential reorgs)
+//    "feerate_percentiles" : [    (json array, optional) Feerates at the 10th, 25th, 50th, 75th, and 90th percentile weight unit (in satoshis per virtual byte)
 //      n,                         (numeric) The 10th percentile feerate
 //      n,                         (numeric) The 25th percentile feerate
 //      n,                         (numeric) The 50th percentile feerate
 //      n,                         (numeric) The 75th percentile feerate
 //      n                          (numeric) The 90th percentile feerate
 //    ],
-//    "height" : n,                (numeric) The height of the block
-//    "ins" : n,                   (numeric) The number of inputs (excluding coinbase)
-//    "maxfee" : n,                (numeric) Maximum fee in the block
-//    "maxfeerate" : n,            (numeric) Maximum feerate (in satoshis per virtual byte)
-//    "maxtxsize" : n,             (numeric) Maximum transaction size
-//    "medianfee" : n,             (numeric) Truncated median fee in the block
-//    "mediantime" : n,            (numeric) The block median time past
-//    "mediantxsize" : n,          (numeric) Truncated median transaction size
-//    "minfee" : n,                (numeric) Minimum fee in the block
-//    "minfeerate" : n,            (numeric) Minimum feerate (in satoshis per virtual byte)
-//    "mintxsize" : n,             (numeric) Minimum transaction size
-//    "outs" : n,                  (numeric) The number of outputs
-//    "subsidy" : n,               (numeric) The block subsidy
-//    "swtotal_size" : n,          (numeric) Total size of all segwit transactions
-//    "swtotal_weight" : n,        (numeric) Total weight of all segwit transactions
-//    "swtxs" : n,                 (numeric) The number of segwit transactions
-//    "time" : n,                  (numeric) The block time
-//    "total_out" : n,             (numeric) Total amount in all outputs (excluding coinbase and thus reward [ie subsidy + totalfee])
-//    "total_size" : n,            (numeric) Total size of all non-coinbase transactions
-//    "total_weight" : n,          (numeric) Total weight of all non-coinbase transactions
-//    "totalfee" : n,              (numeric) The fee total
-//    "txs" : n,                   (numeric) The number of transactions (including coinbase)
-//    "utxo_increase" : n,         (numeric) The increase/decrease in the number of unspent outputs
-//    "utxo_size_inc" : n          (numeric) The increase/decrease in size for the utxo index (not discounting op_return and similar)
+//    "height" : n,                (numeric, optional) The height of the block
+//    "ins" : n,                   (numeric, optional) The number of inputs (excluding coinbase)
+//    "maxfee" : n,                (numeric, optional) Maximum fee in the block
+//    "maxfeerate" : n,            (numeric, optional) Maximum feerate (in satoshis per virtual byte)
+//    "maxtxsize" : n,             (numeric, optional) Maximum transaction size
+//    "medianfee" : n,             (numeric, optional) Truncated median fee in the block
+//    "mediantime" : n,            (numeric, optional) The block median time past
+//    "mediantxsize" : n,          (numeric, optional) Truncated median transaction size
+//    "minfee" : n,                (numeric, optional) Minimum fee in the block
+//    "minfeerate" : n,            (numeric, optional) Minimum feerate (in satoshis per virtual byte)
+//    "mintxsize" : n,             (numeric, optional) Minimum transaction size
+//    "outs" : n,                  (numeric, optional) The number of outputs
+//    "subsidy" : n,               (numeric, optional) The block subsidy
+//    "swtotal_size" : n,          (numeric, optional) Total size of all segwit transactions
+//    "swtotal_weight" : n,        (numeric, optional) Total weight of all segwit transactions
+//    "swtxs" : n,                 (numeric, optional) The number of segwit transactions
+//    "time" : n,                  (numeric, optional) The block time
+//    "total_out" : n,             (numeric, optional) Total amount in all outputs (excluding coinbase and thus reward [ie subsidy + totalfee])
+//    "total_size" : n,            (numeric, optional) Total size of all non-coinbase transactions
+//    "total_weight" : n,          (numeric, optional) Total weight of all non-coinbase transactions
+//    "totalfee" : n,              (numeric, optional) The fee total
+//    "txs" : n,                   (numeric, optional) The number of transactions (including coinbase)
+//    "utxo_increase" : n,         (numeric, optional) The increase/decrease in the number of unspent outputs
+//    "utxo_size_inc" : n          (numeric, optional) The increase/decrease in size for the utxo index (not discounting op_return and similar)
 //  }
 type GetBlockStatsResp struct {
 	// Average fee in the block
-	AvgFee float64 `json:"avgfee"`
+	AvgFee *float64 `json:"avgfee,omitempty"`
 
 	// Average feerate (in satoshis per virtual byte)
-	AvgFeeRate float64 `json:"avgfeerate"`
+	AvgFeeRate *float64 `json:"avgfeerate,omitempty"`
 
 	// Average transaction size
-	AvgTxSize float64 `json:"avgtxsize"`
+	AvgTxSize *float64 `json:"avgtxsize,omitempty"`
 
 	// The block hash (to check for potential reorgs)
-	Blockhash string `json:"blockhash"`
+	Blockhash string `json:"blockhash,omitempty"`
 
 	// Feerates at the 10th, 25th, 50th, 75th, and 90th percentile weight unit (in satoshis per virtual byte)
 	// Element: n    The 10th percentile feerate
@@ -694,79 +814,79 @@ type GetBlockStatsResp struct {
 	// Element: n    The 50th percentile feerate
 	// Element: n    The 75th percentile feerate
 	// n                          (numeric) The 90th percentile feerate
-	FeeRatePercentiles []float64 `json:"feerate_percentiles"`
+	FeeRatePercentiles []float64 `json:"feerate_percentiles,omitempty"`
 
 	// The height of the block
-	Height float64 `json:"height"`
+	Height *float64 `json:"height,omitempty"`
 
 	// The number of inputs (excluding coinbase)
-	Ins float64 `json:"ins"`
+	Ins *float64 `json:"ins,omitempty"`
 
 	// Maximum fee in the block
-	MaxFee float64 `json:"maxfee"`
+	MaxFee *float64 `json:"maxfee,omitempty"`
 
 	// Maximum feerate (in satoshis per virtual byte)
-	MaxFeeRate float64 `json:"maxfeerate"`
+	MaxFeeRate *float64 `json:"maxfeerate,omitempty"`
 
 	// Maximum transaction size
-	MaxTxSize float64 `json:"maxtxsize"`
+	MaxTxSize *float64 `json:"maxtxsize,omitempty"`
 
 	// Truncated median fee in the block
-	MedianFee float64 `json:"medianfee"`
+	MedianFee *float64 `json:"medianfee,omitempty"`
 
 	// The block median time past
-	MedianTime float64 `json:"mediantime"`
+	MedianTime *float64 `json:"mediantime,omitempty"`
 
 	// Truncated median transaction size
-	MedianTxSize float64 `json:"mediantxsize"`
+	MedianTxSize *float64 `json:"mediantxsize,omitempty"`
 
 	// Minimum fee in the block
-	MinFee float64 `json:"minfee"`
+	MinFee *float64 `json:"minfee,omitempty"`
 
 	// Minimum feerate (in satoshis per virtual byte)
-	MinFeeRate float64 `json:"minfeerate"`
+	MinFeeRate *float64 `json:"minfeerate,omitempty"`
 
 	// Minimum transaction size
-	MinTxSize float64 `json:"mintxsize"`
+	MinTxSize *float64 `json:"mintxsize,omitempty"`
 
 	// The number of outputs
-	Outs float64 `json:"outs"`
+	Outs *float64 `json:"outs,omitempty"`
 
 	// The block subsidy
-	Subsidy float64 `json:"subsidy"`
+	Subsidy *float64 `json:"subsidy,omitempty"`
 
 	// Total size of all segwit transactions
-	SwTotalSize float64 `json:"swtotal_size"`
+	SwTotalSize *float64 `json:"swtotal_size,omitempty"`
 
 	// Total weight of all segwit transactions
-	SwTotalWeight float64 `json:"swtotal_weight"`
+	SwTotalWeight *float64 `json:"swtotal_weight,omitempty"`
 
 	// The number of segwit transactions
-	SwTxs float64 `json:"swtxs"`
+	SwTxs *float64 `json:"swtxs,omitempty"`
 
 	// The block time
-	Time float64 `json:"time"`
+	Time *float64 `json:"time,omitempty"`
 
 	// Total amount in all outputs (excluding coinbase and thus reward [ie subsidy + totalfee])
-	TotalOut float64 `json:"total_out"`
+	TotalOut *float64 `json:"total_out,omitempty"`
 
 	// Total size of all non-coinbase transactions
-	TotalSize float64 `json:"total_size"`
+	TotalSize *float64 `json:"total_size,omitempty"`
 
 	// Total weight of all non-coinbase transactions
-	TotalWeight float64 `json:"total_weight"`
+	TotalWeight *float64 `json:"total_weight,omitempty"`
 
 	// The fee total
-	TotalFee float64 `json:"totalfee"`
+	TotalFee *float64 `json:"totalfee,omitempty"`
 
 	// The number of transactions (including coinbase)
-	Txs float64 `json:"txs"`
+	Txs *float64 `json:"txs,omitempty"`
 
 	// The increase/decrease in the number of unspent outputs
-	UtxoIncrease float64 `json:"utxo_increase"`
+	UtxoIncrease *float64 `json:"utxo_increase,omitempty"`
 
 	// The increase/decrease in size for the utxo index (not discounting op_return and similar)
-	UtxoSizeInc float64 `json:"utxo_size_inc"`
+	UtxoSizeInc *float64 `json:"utxo_size_inc,omitempty"`
 }
 
 // GetBlockStats RPC method.
@@ -909,6 +1029,126 @@ func (bc *BitcoindClient) GetChainTxStats(ctx context.Context, args GetChainTxSt
 	return
 }
 
+// GetDeploymentInfoReq holds the arguments for the GetDeploymentInfo call.
+//  1. blockhash    (string, optional, default="hash of current chain tip") The block hash at which to query deployment state
+type GetDeploymentInfoReq struct {
+	// The block hash at which to query deployment state
+	// Default: "hash of current chain tip"
+	Blockhash string `json:"blockhash,omitempty"`
+}
+
+// GetDeploymentInfoResp holds the response to the GetDeploymentInfo call.
+//  {                                       (json object)
+//    "hash" : "str",                       (string) requested block hash (or tip)
+//    "height" : n,                         (numeric) requested block height (or tip)
+//    "deployments" : {                     (json object)
+//      "xxxx" : {                          (json object) name of the deployment
+//        "type" : "str",                   (string) one of "buried", "bip9"
+//        "height" : n,                     (numeric, optional) height of the first block which the rules are or will be enforced (only for "buried" type, or "bip9" type with "active" status)
+//        "active" : true|false,            (boolean) true if the rules are enforced for the mempool and the next block
+//        "bip9" : {                        (json object, optional) status of bip9 softforks (only for "bip9" type)
+//          "bit" : n,                      (numeric, optional) the bit (0-28) in the block version field used to signal this softfork (only for "started" and "locked_in" status)
+//          "start_time" : xxx,             (numeric) the minimum median time past of a block at which the bit gains its meaning
+//          "timeout" : xxx,                (numeric) the median time past of a block at which the deployment is considered failed if not yet locked in
+//          "min_activation_height" : n,    (numeric) minimum height of blocks for which the rules may be enforced
+//          "status" : "str",               (string) status of deployment at specified block (one of "defined", "started", "locked_in", "active", "failed")
+//          "since" : n,                    (numeric) height of the first block to which the status applies
+//          "status_next" : "str",          (string) status of deployment at the next block
+//          "statistics" : {                (json object, optional) numeric statistics about signalling for a softfork (only for "started" and "locked_in" status)
+//            "period" : n,                 (numeric) the length in blocks of the signalling period
+//            "threshold" : n,              (numeric, optional) the number of blocks with the version bit set required to activate the feature (only for "started" status)
+//            "elapsed" : n,                (numeric) the number of blocks elapsed since the beginning of the current period
+//            "count" : n,                  (numeric) the number of blocks with the version bit set in the current period
+//            "possible" : true|false       (boolean, optional) returns false if there are not enough blocks left in this period to pass activation threshold (only for "started" status)
+//          },
+//          "signalling" : "str"            (string) indicates blocks that signalled with a # and blocks that did not with a -
+//        }
+//      }
+//    }
+//  }
+type GetDeploymentInfoResp struct {
+	// requested block hash (or tip)
+	Hash string `json:"hash"`
+
+	// requested block height (or tip)
+	Height float64 `json:"height"`
+
+	// name of the deployment
+	// Key: xxxx, Value: struct
+	Deployments map[string]GetDeploymentInfoRespDeployments `json:"deployments"`
+}
+
+type GetDeploymentInfoRespDeployments struct {
+	// one of "buried", "bip9"
+	Type string `json:"type"`
+
+	// height of the first block which the rules are or will be enforced (only for "buried" type, or "bip9" type with "active" status)
+	Height *float64 `json:"height,omitempty"`
+
+	// true if the rules are enforced for the mempool and the next block
+	Active bool `json:"active"`
+
+	// status of bip9 softforks (only for "bip9" type)
+	BIP9 *GetDeploymentInfoRespDeploymentsBIP9 `json:"bip9,omitempty"`
+}
+
+type GetDeploymentInfoRespDeploymentsBIP9 struct {
+	// the bit (0-28) in the block version field used to signal this softfork (only for "started" and "locked_in" status)
+	Bit *float64 `json:"bit,omitempty"`
+
+	// the minimum median time past of a block at which the bit gains its meaning
+	StartTime float64 `json:"start_time"`
+
+	// the median time past of a block at which the deployment is considered failed if not yet locked in
+	TimeOut float64 `json:"timeout"`
+
+	// minimum height of blocks for which the rules may be enforced
+	MinActivationHeight float64 `json:"min_activation_height"`
+
+	// status of deployment at specified block (one of "defined", "started", "locked_in", "active", "failed")
+	Status string `json:"status"`
+
+	// height of the first block to which the status applies
+	Since float64 `json:"since"`
+
+	// status of deployment at the next block
+	StatusNext string `json:"status_next"`
+
+	// numeric statistics about signalling for a softfork (only for "started" and "locked_in" status)
+	Statistics *GetDeploymentInfoRespDeploymentsBIP9Statistics `json:"statistics,omitempty"`
+
+	// indicates blocks that signalled with a # and blocks that did not with a -
+	Signalling string `json:"signalling"`
+}
+
+type GetDeploymentInfoRespDeploymentsBIP9Statistics struct {
+	// the length in blocks of the signalling period
+	Period float64 `json:"period"`
+
+	// the number of blocks with the version bit set required to activate the feature (only for "started" status)
+	Threshold *float64 `json:"threshold,omitempty"`
+
+	// the number of blocks elapsed since the beginning of the current period
+	Elapsed float64 `json:"elapsed"`
+
+	// the number of blocks with the version bit set in the current period
+	Count float64 `json:"count"`
+
+	// returns false if there are not enough blocks left in this period to pass activation threshold (only for "started" status)
+	Possible *bool `json:"possible,omitempty"`
+}
+
+// GetDeploymentInfo RPC method.
+// Returns an object containing various state info regarding deployments of consensus changes.
+func (bc *BitcoindClient) GetDeploymentInfo(ctx context.Context, args GetDeploymentInfoReq) (result GetDeploymentInfoResp, err error) {
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "getdeploymentinfo", args); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
+	return
+}
+
 // GetDifficultyResp holds the response to the GetDifficulty call.
 //  n    (numeric) the proof-of-work difficulty as a multiple of the minimum difficulty.
 type GetDifficultyResp struct {
@@ -968,22 +1208,22 @@ type GetMempoolAncestorsReq struct {
 //    "transactionid" : {                     (json object)
 //      "vsize" : n,                          (numeric) virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 //      "weight" : n,                         (numeric) transaction weight as defined in BIP 141.
-//      "fee" : n,                            (numeric) transaction fee in BTC (DEPRECATED)
-//      "modifiedfee" : n,                    (numeric) transaction fee with fee deltas used for mining priority (DEPRECATED)
+//      "fee" : n,                            (numeric, optional) transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+//      "modifiedfee" : n,                    (numeric, optional) transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 //      "height" : n,                         (numeric) block height when transaction entered pool
 //      "descendantcount" : n,                (numeric) number of in-mempool descendant transactions (including this one)
 //      "descendantsize" : n,                 (numeric) virtual transaction size of in-mempool descendants (including this one)
-//      "descendantfees" : n,                 (numeric) modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
+//      "descendantfees" : n,                 (numeric, optional) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "ancestorcount" : n,                  (numeric) number of in-mempool ancestor transactions (including this one)
 //      "ancestorsize" : n,                   (numeric) virtual transaction size of in-mempool ancestors (including this one)
-//      "ancestorfees" : n,                   (numeric) modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
+//      "ancestorfees" : n,                   (numeric, optional) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "wtxid" : "hex",                      (string) hash of serialized transaction, including witness data
 //      "fees" : {                            (json object)
-//        "base" : n,                         (numeric) transaction fee in BTC
-//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority in BTC
-//        "ancestor" : n,                     (numeric) modified fees (see above) of in-mempool ancestors (including this one) in BTC
-//        "descendant" : n                    (numeric) modified fees (see above) of in-mempool descendants (including this one) in BTC
+//        "base" : n,                         (numeric) transaction fee, denominated in BTC
+//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority, denominated in BTC
+//        "ancestor" : n,                     (numeric) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
+//        "descendant" : n                    (numeric) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 //      },
 //      "depends" : [                         (json array) unconfirmed transactions used as inputs for this transaction
 //        "hex",                              (string) parent transaction id
@@ -1002,7 +1242,8 @@ type GetMempoolAncestorsResp struct {
 	// Element: Hex    The transaction id of an in-mempool ancestor transaction
 	Hex []string
 
-	ForVerboseEqualsTrue map[string]GetMempoolAncestorsRespForVerboseEqualsTrueTransactionID
+	// Key: transactionid, Value: struct
+	ForVerboseEqualsTrue map[string]GetMempoolAncestorsRespForVerboseEqualsTrue
 }
 
 func (alts GetMempoolAncestorsResp) MarshalJSON() ([]byte, error) {
@@ -1030,18 +1271,18 @@ func (alts *GetMempoolAncestorsResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "GetMempoolAncestorsResp"}
 }
 
-type GetMempoolAncestorsRespForVerboseEqualsTrueTransactionID struct {
+type GetMempoolAncestorsRespForVerboseEqualsTrue struct {
 	// virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 	VSize float64 `json:"vsize"`
 
 	// transaction weight as defined in BIP 141.
 	Weight float64 `json:"weight"`
 
-	// transaction fee in BTC (DEPRECATED)
-	Fee float64 `json:"fee"`
+	// transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	Fee *float64 `json:"fee,omitempty"`
 
-	// transaction fee with fee deltas used for mining priority (DEPRECATED)
-	ModifiedFee float64 `json:"modifiedfee"`
+	// transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	ModifiedFee *float64 `json:"modifiedfee,omitempty"`
 
 	// local time transaction entered pool in seconds since 1 Jan 1970 GMT
 	Time float64 `json:"time"`
@@ -1055,8 +1296,8 @@ type GetMempoolAncestorsRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool descendants (including this one)
 	DescendantSize float64 `json:"descendantsize"`
 
-	// modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
-	DescendantFees float64 `json:"descendantfees"`
+	// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	DescendantFees *float64 `json:"descendantfees,omitempty"`
 
 	// number of in-mempool ancestor transactions (including this one)
 	AncestorCount float64 `json:"ancestorcount"`
@@ -1064,23 +1305,23 @@ type GetMempoolAncestorsRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool ancestors (including this one)
 	AncestorSize float64 `json:"ancestorsize"`
 
-	// modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
-	AncestorFees float64 `json:"ancestorfees"`
+	// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	AncestorFees *float64 `json:"ancestorfees,omitempty"`
 
 	// hash of serialized transaction, including witness data
 	WTxID string `json:"wtxid"`
 
 	Fees struct {
-		// transaction fee in BTC
+		// transaction fee, denominated in BTC
 		Base float64 `json:"base"`
 
-		// transaction fee with fee deltas used for mining priority in BTC
+		// transaction fee with fee deltas used for mining priority, denominated in BTC
 		Modified float64 `json:"modified"`
 
-		// modified fees (see above) of in-mempool ancestors (including this one) in BTC
+		// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
 		Ancestor float64 `json:"ancestor"`
 
-		// modified fees (see above) of in-mempool descendants (including this one) in BTC
+		// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 		Descendant float64 `json:"descendant"`
 	} `json:"fees"`
 
@@ -1135,22 +1376,22 @@ type GetMempoolDescendantsReq struct {
 //    "transactionid" : {                     (json object)
 //      "vsize" : n,                          (numeric) virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 //      "weight" : n,                         (numeric) transaction weight as defined in BIP 141.
-//      "fee" : n,                            (numeric) transaction fee in BTC (DEPRECATED)
-//      "modifiedfee" : n,                    (numeric) transaction fee with fee deltas used for mining priority (DEPRECATED)
+//      "fee" : n,                            (numeric, optional) transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+//      "modifiedfee" : n,                    (numeric, optional) transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 //      "height" : n,                         (numeric) block height when transaction entered pool
 //      "descendantcount" : n,                (numeric) number of in-mempool descendant transactions (including this one)
 //      "descendantsize" : n,                 (numeric) virtual transaction size of in-mempool descendants (including this one)
-//      "descendantfees" : n,                 (numeric) modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
+//      "descendantfees" : n,                 (numeric, optional) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "ancestorcount" : n,                  (numeric) number of in-mempool ancestor transactions (including this one)
 //      "ancestorsize" : n,                   (numeric) virtual transaction size of in-mempool ancestors (including this one)
-//      "ancestorfees" : n,                   (numeric) modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
+//      "ancestorfees" : n,                   (numeric, optional) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "wtxid" : "hex",                      (string) hash of serialized transaction, including witness data
 //      "fees" : {                            (json object)
-//        "base" : n,                         (numeric) transaction fee in BTC
-//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority in BTC
-//        "ancestor" : n,                     (numeric) modified fees (see above) of in-mempool ancestors (including this one) in BTC
-//        "descendant" : n                    (numeric) modified fees (see above) of in-mempool descendants (including this one) in BTC
+//        "base" : n,                         (numeric) transaction fee, denominated in BTC
+//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority, denominated in BTC
+//        "ancestor" : n,                     (numeric) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
+//        "descendant" : n                    (numeric) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 //      },
 //      "depends" : [                         (json array) unconfirmed transactions used as inputs for this transaction
 //        "hex",                              (string) parent transaction id
@@ -1169,7 +1410,8 @@ type GetMempoolDescendantsResp struct {
 	// Element: Hex    The transaction id of an in-mempool descendant transaction
 	Hex []string
 
-	ForVerboseEqualsTrue map[string]GetMempoolDescendantsRespForVerboseEqualsTrueTransactionID
+	// Key: transactionid, Value: struct
+	ForVerboseEqualsTrue map[string]GetMempoolDescendantsRespForVerboseEqualsTrue
 }
 
 func (alts GetMempoolDescendantsResp) MarshalJSON() ([]byte, error) {
@@ -1197,18 +1439,18 @@ func (alts *GetMempoolDescendantsResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "GetMempoolDescendantsResp"}
 }
 
-type GetMempoolDescendantsRespForVerboseEqualsTrueTransactionID struct {
+type GetMempoolDescendantsRespForVerboseEqualsTrue struct {
 	// virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 	VSize float64 `json:"vsize"`
 
 	// transaction weight as defined in BIP 141.
 	Weight float64 `json:"weight"`
 
-	// transaction fee in BTC (DEPRECATED)
-	Fee float64 `json:"fee"`
+	// transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	Fee *float64 `json:"fee,omitempty"`
 
-	// transaction fee with fee deltas used for mining priority (DEPRECATED)
-	ModifiedFee float64 `json:"modifiedfee"`
+	// transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	ModifiedFee *float64 `json:"modifiedfee,omitempty"`
 
 	// local time transaction entered pool in seconds since 1 Jan 1970 GMT
 	Time float64 `json:"time"`
@@ -1222,8 +1464,8 @@ type GetMempoolDescendantsRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool descendants (including this one)
 	DescendantSize float64 `json:"descendantsize"`
 
-	// modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
-	DescendantFees float64 `json:"descendantfees"`
+	// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	DescendantFees *float64 `json:"descendantfees,omitempty"`
 
 	// number of in-mempool ancestor transactions (including this one)
 	AncestorCount float64 `json:"ancestorcount"`
@@ -1231,23 +1473,23 @@ type GetMempoolDescendantsRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool ancestors (including this one)
 	AncestorSize float64 `json:"ancestorsize"`
 
-	// modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
-	AncestorFees float64 `json:"ancestorfees"`
+	// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	AncestorFees *float64 `json:"ancestorfees,omitempty"`
 
 	// hash of serialized transaction, including witness data
 	WTxID string `json:"wtxid"`
 
 	Fees struct {
-		// transaction fee in BTC
+		// transaction fee, denominated in BTC
 		Base float64 `json:"base"`
 
-		// transaction fee with fee deltas used for mining priority in BTC
+		// transaction fee with fee deltas used for mining priority, denominated in BTC
 		Modified float64 `json:"modified"`
 
-		// modified fees (see above) of in-mempool ancestors (including this one) in BTC
+		// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
 		Ancestor float64 `json:"ancestor"`
 
-		// modified fees (see above) of in-mempool descendants (including this one) in BTC
+		// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 		Descendant float64 `json:"descendant"`
 	} `json:"fees"`
 
@@ -1288,22 +1530,22 @@ type GetMempoolEntryReq struct {
 //  {                                       (json object)
 //    "vsize" : n,                          (numeric) virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 //    "weight" : n,                         (numeric) transaction weight as defined in BIP 141.
-//    "fee" : n,                            (numeric) transaction fee in BTC (DEPRECATED)
-//    "modifiedfee" : n,                    (numeric) transaction fee with fee deltas used for mining priority (DEPRECATED)
+//    "fee" : n,                            (numeric, optional) transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+//    "modifiedfee" : n,                    (numeric, optional) transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //    "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 //    "height" : n,                         (numeric) block height when transaction entered pool
 //    "descendantcount" : n,                (numeric) number of in-mempool descendant transactions (including this one)
 //    "descendantsize" : n,                 (numeric) virtual transaction size of in-mempool descendants (including this one)
-//    "descendantfees" : n,                 (numeric) modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
+//    "descendantfees" : n,                 (numeric, optional) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //    "ancestorcount" : n,                  (numeric) number of in-mempool ancestor transactions (including this one)
 //    "ancestorsize" : n,                   (numeric) virtual transaction size of in-mempool ancestors (including this one)
-//    "ancestorfees" : n,                   (numeric) modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
+//    "ancestorfees" : n,                   (numeric, optional) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //    "wtxid" : "hex",                      (string) hash of serialized transaction, including witness data
 //    "fees" : {                            (json object)
-//      "base" : n,                         (numeric) transaction fee in BTC
-//      "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority in BTC
-//      "ancestor" : n,                     (numeric) modified fees (see above) of in-mempool ancestors (including this one) in BTC
-//      "descendant" : n                    (numeric) modified fees (see above) of in-mempool descendants (including this one) in BTC
+//      "base" : n,                         (numeric) transaction fee, denominated in BTC
+//      "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority, denominated in BTC
+//      "ancestor" : n,                     (numeric) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
+//      "descendant" : n                    (numeric) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 //    },
 //    "depends" : [                         (json array) unconfirmed transactions used as inputs for this transaction
 //      "hex",                              (string) parent transaction id
@@ -1323,11 +1565,11 @@ type GetMempoolEntryResp struct {
 	// transaction weight as defined in BIP 141.
 	Weight float64 `json:"weight"`
 
-	// transaction fee in BTC (DEPRECATED)
-	Fee float64 `json:"fee"`
+	// transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	Fee *float64 `json:"fee,omitempty"`
 
-	// transaction fee with fee deltas used for mining priority (DEPRECATED)
-	ModifiedFee float64 `json:"modifiedfee"`
+	// transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	ModifiedFee *float64 `json:"modifiedfee,omitempty"`
 
 	// local time transaction entered pool in seconds since 1 Jan 1970 GMT
 	Time float64 `json:"time"`
@@ -1341,8 +1583,8 @@ type GetMempoolEntryResp struct {
 	// virtual transaction size of in-mempool descendants (including this one)
 	DescendantSize float64 `json:"descendantsize"`
 
-	// modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
-	DescendantFees float64 `json:"descendantfees"`
+	// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	DescendantFees *float64 `json:"descendantfees,omitempty"`
 
 	// number of in-mempool ancestor transactions (including this one)
 	AncestorCount float64 `json:"ancestorcount"`
@@ -1350,23 +1592,23 @@ type GetMempoolEntryResp struct {
 	// virtual transaction size of in-mempool ancestors (including this one)
 	AncestorSize float64 `json:"ancestorsize"`
 
-	// modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
-	AncestorFees float64 `json:"ancestorfees"`
+	// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	AncestorFees *float64 `json:"ancestorfees,omitempty"`
 
 	// hash of serialized transaction, including witness data
 	WTxID string `json:"wtxid"`
 
 	Fees struct {
-		// transaction fee in BTC
+		// transaction fee, denominated in BTC
 		Base float64 `json:"base"`
 
-		// transaction fee with fee deltas used for mining priority in BTC
+		// transaction fee with fee deltas used for mining priority, denominated in BTC
 		Modified float64 `json:"modified"`
 
-		// modified fees (see above) of in-mempool ancestors (including this one) in BTC
+		// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
 		Ancestor float64 `json:"ancestor"`
 
-		// modified fees (see above) of in-mempool descendants (including this one) in BTC
+		// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 		Descendant float64 `json:"descendant"`
 	} `json:"fees"`
 
@@ -1402,7 +1644,7 @@ func (bc *BitcoindClient) GetMempoolEntry(ctx context.Context, args GetMempoolEn
 //    "size" : n,                (numeric) Current tx count
 //    "bytes" : n,               (numeric) Sum of all virtual transaction sizes as defined in BIP 141. Differs from actual serialized size because witness data is discounted
 //    "usage" : n,               (numeric) Total memory usage for the mempool
-//    "total_fee" : n,           (numeric) Total fees for the mempool in BTC, ignoring modified fees through prioritizetransaction
+//    "total_fee" : n,           (numeric) Total fees for the mempool in BTC, ignoring modified fees through prioritisetransaction
 //    "maxmempool" : n,          (numeric) Maximum memory usage for the mempool
 //    "mempoolminfee" : n,       (numeric) Minimum fee rate in BTC/kvB for tx to be accepted. Is the maximum of minrelaytxfee and minimum mempool fee
 //    "minrelaytxfee" : n,       (numeric) Current minimum relay fee for transactions
@@ -1421,7 +1663,7 @@ type GetMempoolInfoResp struct {
 	// Total memory usage for the mempool
 	Usage float64 `json:"usage"`
 
-	// Total fees for the mempool in BTC, ignoring modified fees through prioritizetransaction
+	// Total fees for the mempool in BTC, ignoring modified fees through prioritisetransaction
 	TotalFee float64 `json:"total_fee"`
 
 	// Maximum memory usage for the mempool
@@ -1474,22 +1716,22 @@ type GetRawMempoolReq struct {
 //    "transactionid" : {                     (json object)
 //      "vsize" : n,                          (numeric) virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 //      "weight" : n,                         (numeric) transaction weight as defined in BIP 141.
-//      "fee" : n,                            (numeric) transaction fee in BTC (DEPRECATED)
-//      "modifiedfee" : n,                    (numeric) transaction fee with fee deltas used for mining priority (DEPRECATED)
+//      "fee" : n,                            (numeric, optional) transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+//      "modifiedfee" : n,                    (numeric, optional) transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 //      "height" : n,                         (numeric) block height when transaction entered pool
 //      "descendantcount" : n,                (numeric) number of in-mempool descendant transactions (including this one)
 //      "descendantsize" : n,                 (numeric) virtual transaction size of in-mempool descendants (including this one)
-//      "descendantfees" : n,                 (numeric) modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
+//      "descendantfees" : n,                 (numeric, optional) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "ancestorcount" : n,                  (numeric) number of in-mempool ancestor transactions (including this one)
 //      "ancestorsize" : n,                   (numeric) virtual transaction size of in-mempool ancestors (including this one)
-//      "ancestorfees" : n,                   (numeric) modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
+//      "ancestorfees" : n,                   (numeric, optional) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
 //      "wtxid" : "hex",                      (string) hash of serialized transaction, including witness data
 //      "fees" : {                            (json object)
-//        "base" : n,                         (numeric) transaction fee in BTC
-//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority in BTC
-//        "ancestor" : n,                     (numeric) modified fees (see above) of in-mempool ancestors (including this one) in BTC
-//        "descendant" : n                    (numeric) modified fees (see above) of in-mempool descendants (including this one) in BTC
+//        "base" : n,                         (numeric) transaction fee, denominated in BTC
+//        "modified" : n,                     (numeric) transaction fee with fee deltas used for mining priority, denominated in BTC
+//        "ancestor" : n,                     (numeric) transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
+//        "descendant" : n                    (numeric) transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 //      },
 //      "depends" : [                         (json array) unconfirmed transactions used as inputs for this transaction
 //        "hex",                              (string) parent transaction id
@@ -1517,7 +1759,8 @@ type GetRawMempoolResp struct {
 	// Element: Hex    The transaction id
 	Hex []string
 
-	ForVerboseEqualsTrue map[string]GetRawMempoolRespForVerboseEqualsTrueTransactionID
+	// Key: transactionid, Value: struct
+	ForVerboseEqualsTrue map[string]GetRawMempoolRespForVerboseEqualsTrue
 
 	ForVerboseEqualsFalseAndMempoolSequenceEqualsTrue GetRawMempoolRespForVerboseEqualsFalseAndMempoolSequenceEqualsTrue
 }
@@ -1556,18 +1799,18 @@ func (alts *GetRawMempoolResp) UnmarshalJSON(b []byte) error {
 	return &UnmarshalError{B: b, structName: "GetRawMempoolResp"}
 }
 
-type GetRawMempoolRespForVerboseEqualsTrueTransactionID struct {
+type GetRawMempoolRespForVerboseEqualsTrue struct {
 	// virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
 	VSize float64 `json:"vsize"`
 
 	// transaction weight as defined in BIP 141.
 	Weight float64 `json:"weight"`
 
-	// transaction fee in BTC (DEPRECATED)
-	Fee float64 `json:"fee"`
+	// transaction fee, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	Fee *float64 `json:"fee,omitempty"`
 
-	// transaction fee with fee deltas used for mining priority (DEPRECATED)
-	ModifiedFee float64 `json:"modifiedfee"`
+	// transaction fee with fee deltas used for mining priority, denominated in BTC (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	ModifiedFee *float64 `json:"modifiedfee,omitempty"`
 
 	// local time transaction entered pool in seconds since 1 Jan 1970 GMT
 	Time float64 `json:"time"`
@@ -1581,8 +1824,8 @@ type GetRawMempoolRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool descendants (including this one)
 	DescendantSize float64 `json:"descendantsize"`
 
-	// modified fees (see above) of in-mempool descendants (including this one) (DEPRECATED)
-	DescendantFees float64 `json:"descendantfees"`
+	// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	DescendantFees *float64 `json:"descendantfees,omitempty"`
 
 	// number of in-mempool ancestor transactions (including this one)
 	AncestorCount float64 `json:"ancestorcount"`
@@ -1590,23 +1833,23 @@ type GetRawMempoolRespForVerboseEqualsTrueTransactionID struct {
 	// virtual transaction size of in-mempool ancestors (including this one)
 	AncestorSize float64 `json:"ancestorsize"`
 
-	// modified fees (see above) of in-mempool ancestors (including this one) (DEPRECATED)
-	AncestorFees float64 `json:"ancestorfees"`
+	// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in sats (DEPRECATED, returned only if config option -deprecatedrpc=fees is passed)
+	AncestorFees *float64 `json:"ancestorfees,omitempty"`
 
 	// hash of serialized transaction, including witness data
 	WTxID string `json:"wtxid"`
 
 	Fees struct {
-		// transaction fee in BTC
+		// transaction fee, denominated in BTC
 		Base float64 `json:"base"`
 
-		// transaction fee with fee deltas used for mining priority in BTC
+		// transaction fee with fee deltas used for mining priority, denominated in BTC
 		Modified float64 `json:"modified"`
 
-		// modified fees (see above) of in-mempool ancestors (including this one) in BTC
+		// transaction fees of in-mempool ancestors (including this one) with fee deltas used for mining priority, denominated in BTC
 		Ancestor float64 `json:"ancestor"`
 
-		// modified fees (see above) of in-mempool descendants (including this one) in BTC
+		// transaction fees of in-mempool descendants (including this one) with fee deltas used for mining priority, denominated in BTC
 		Descendant float64 `json:"descendant"`
 	} `json:"fees"`
 
@@ -1673,14 +1916,10 @@ type GetTxOutReq struct {
 //    "value" : n,                (numeric) The transaction value in BTC
 //    "scriptPubKey" : {          (json object)
 //      "asm" : "str",            (string)
+//      "desc" : "str",           (string) Inferred descriptor for the output
 //      "hex" : "hex",            (string)
-//      "reqSigs" : n,            (numeric, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
 //      "type" : "str",           (string) The type, eg pubkeyhash
-//      "address" : "str",        (string, optional) bitcoin address (only if a well-defined address exists)
-//      "addresses" : [           (json array, optional) (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-//        "str",                  (string) bitcoin address
-//        ...
-//      ]
+//      "address" : "str"         (string, optional) The Bitcoin address (only if a well-defined address exists)
 //    },
 //    "coinbase" : true|false     (boolean) Coinbase or not
 //  }
@@ -1697,20 +1936,16 @@ type GetTxOutResp struct {
 	ScriptPubkey struct {
 		Asm string `json:"asm"`
 
-		Hex string `json:"hex"`
+		// Inferred descriptor for the output
+		Desc string `json:"desc"`
 
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Number of required signatures
-		ReqSigs *float64 `json:"reqSigs,omitempty"`
+		Hex string `json:"hex"`
 
 		// The type, eg pubkeyhash
 		Type string `json:"type"`
 
-		// bitcoin address (only if a well-defined address exists)
+		// The Bitcoin address (only if a well-defined address exists)
 		Address string `json:"address,omitempty"`
-
-		// (DEPRECATED, returned only if config option -deprecatedrpc=addresses is passed) Array of bitcoin addresses
-		// Element: Str    bitcoin address
-		Addresses []string `json:"addresses,omitempty"`
 	} `json:"scriptPubKey"`
 
 	// Coinbase or not
@@ -1807,17 +2042,17 @@ type GetTxOutSetInfoReq struct {
 //    "bogosize" : n,                     (numeric) Database-independent, meaningless metric indicating the UTXO set size
 //    "hash_serialized_2" : "hex",        (string, optional) The serialized hash (only present if 'hash_serialized_2' hash_type is chosen)
 //    "muhash" : "hex",                   (string, optional) The serialized hash (only present if 'muhash' hash_type is chosen)
-//    "transactions" : n,                 (numeric) The number of transactions with unspent outputs (not available when coinstatsindex is used)
-//    "disk_size" : n,                    (numeric) The estimated size of the chainstate on disk (not available when coinstatsindex is used)
+//    "transactions" : n,                 (numeric, optional) The number of transactions with unspent outputs (not available when coinstatsindex is used)
+//    "disk_size" : n,                    (numeric, optional) The estimated size of the chainstate on disk (not available when coinstatsindex is used)
 //    "total_amount" : n,                 (numeric) The total amount of coins in the UTXO set
-//    "total_unspendable_amount" : n,     (numeric) The total amount of coins permanently excluded from the UTXO set (only available if coinstatsindex is used)
-//    "block_info" : {                    (json object) Info on amounts in the block at this block height (only available if coinstatsindex is used)
-//      "prevout_spent" : n,              (numeric)
-//      "coinbase" : n,                   (numeric)
-//      "new_outputs_ex_coinbase" : n,    (numeric)
-//      "unspendable" : n,                (numeric)
+//    "total_unspendable_amount" : n,     (numeric, optional) The total amount of coins permanently excluded from the UTXO set (only available if coinstatsindex is used)
+//    "block_info" : {                    (json object, optional) Info on amounts in the block at this block height (only available if coinstatsindex is used)
+//      "prevout_spent" : n,              (numeric) Total amount of all prevouts spent in this block
+//      "coinbase" : n,                   (numeric) Coinbase subsidy amount of this block
+//      "new_outputs_ex_coinbase" : n,    (numeric) Total amount of new outputs created by this block
+//      "unspendable" : n,                (numeric) Total amount of unspendable outputs created in this block
 //      "unspendables" : {                (json object) Detailed view of the unspendable categories
-//        "genesis_block" : n,            (numeric)
+//        "genesis_block" : n,            (numeric) The unspendable amount of the Genesis block subsidy
 //        "bip30" : n,                    (numeric) Transactions overridden by duplicates (no longer possible with BIP30)
 //        "scripts" : n,                  (numeric) Amounts sent to scripts that are unspendable (for example OP_RETURN outputs)
 //        "unclaimed_rewards" : n         (numeric) Fee rewards that miners did not claim in their coinbase transaction
@@ -1844,41 +2079,48 @@ type GetTxOutSetInfoResp struct {
 	MuHash string `json:"muhash,omitempty"`
 
 	// The number of transactions with unspent outputs (not available when coinstatsindex is used)
-	Transactions float64 `json:"transactions"`
+	Transactions *float64 `json:"transactions,omitempty"`
 
 	// The estimated size of the chainstate on disk (not available when coinstatsindex is used)
-	DiskSize float64 `json:"disk_size"`
+	DiskSize *float64 `json:"disk_size,omitempty"`
 
 	// The total amount of coins in the UTXO set
 	TotalAmount float64 `json:"total_amount"`
 
 	// The total amount of coins permanently excluded from the UTXO set (only available if coinstatsindex is used)
-	TotalUnspendableAmount float64 `json:"total_unspendable_amount"`
+	TotalUnspendableAmount *float64 `json:"total_unspendable_amount,omitempty"`
 
 	// Info on amounts in the block at this block height (only available if coinstatsindex is used)
-	BlockInfo struct {
-		PrevOutSpent float64 `json:"prevout_spent"`
+	BlockInfo *GetTxOutSetInfoRespBlockInfo `json:"block_info,omitempty"`
+}
 
-		Coinbase float64 `json:"coinbase"`
+type GetTxOutSetInfoRespBlockInfo struct {
+	// Total amount of all prevouts spent in this block
+	PrevOutSpent float64 `json:"prevout_spent"`
 
-		NewOutputsExCoinbase float64 `json:"new_outputs_ex_coinbase"`
+	// Coinbase subsidy amount of this block
+	Coinbase float64 `json:"coinbase"`
 
-		Unspendable float64 `json:"unspendable"`
+	// Total amount of new outputs created by this block
+	NewOutputsExCoinbase float64 `json:"new_outputs_ex_coinbase"`
 
-		// Detailed view of the unspendable categories
-		Unspendables struct {
-			GenesisBlock float64 `json:"genesis_block"`
+	// Total amount of unspendable outputs created in this block
+	Unspendable float64 `json:"unspendable"`
 
-			// Transactions overridden by duplicates (no longer possible with BIP30)
-			BIP30 float64 `json:"bip30"`
+	// Detailed view of the unspendable categories
+	Unspendables struct {
+		// The unspendable amount of the Genesis block subsidy
+		GenesisBlock float64 `json:"genesis_block"`
 
-			// Amounts sent to scripts that are unspendable (for example OP_RETURN outputs)
-			Scripts float64 `json:"scripts"`
+		// Transactions overridden by duplicates (no longer possible with BIP30)
+		BIP30 float64 `json:"bip30"`
 
-			// Fee rewards that miners did not claim in their coinbase transaction
-			UnclaimedRewards float64 `json:"unclaimed_rewards"`
-		} `json:"unspendables"`
-	} `json:"block_info"`
+		// Amounts sent to scripts that are unspendable (for example OP_RETURN outputs)
+		Scripts float64 `json:"scripts"`
+
+		// Fee rewards that miners did not claim in their coinbase transaction
+		UnclaimedRewards float64 `json:"unclaimed_rewards"`
+	} `json:"unspendables"`
 }
 
 // GetTxOutSetInfo RPC method.
@@ -1951,10 +2193,23 @@ func (bc *BitcoindClient) PruneBlockchain(ctx context.Context, args PruneBlockch
 	return
 }
 
+// SaveMempoolResp holds the response to the SaveMempool call.
+//  {                        (json object)
+//    "filename" : "str"     (string) the directory and file where the mempool was saved
+//  }
+type SaveMempoolResp struct {
+	// the directory and file where the mempool was saved
+	FileName string `json:"filename"`
+}
+
 // SaveMempool RPC method.
 // Dumps the mempool to disk. It will fail until the previous dump is fully loaded.
-func (bc *BitcoindClient) SaveMempool(ctx context.Context) (err error) {
-	_, err = bc.sendRequest(ctx, "savemempool", nil)
+func (bc *BitcoindClient) SaveMempool(ctx context.Context) (result SaveMempoolResp, err error) {
+	var resultRaw json.RawMessage
+	if resultRaw, err = bc.sendRequest(ctx, "savemempool", nil); err != nil {
+		return
+	}
+	err = json.Unmarshal(resultRaw, &result)
 	return
 }
 
@@ -2234,11 +2489,11 @@ type VerifyTxOutProofReq struct {
 
 // VerifyTxOutProofResp holds the response to the VerifyTxOutProof call.
 //  [           (json array)
-//    "hex",    (string) The txid(s) which the proof commits to, or empty array if the proof can not be validated.
+//    "hex",    (string) The txid(s) which the proof commits to, or empty array if the proof cannot be validated.
 //    ...
 //  ]
 type VerifyTxOutProofResp struct {
-	// Element: Hex    The txid(s) which the proof commits to, or empty array if the proof can not be validated.
+	// Element: Hex    The txid(s) which the proof commits to, or empty array if the proof cannot be validated.
 	Hex []string
 }
 

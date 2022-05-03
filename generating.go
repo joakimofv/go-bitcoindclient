@@ -38,7 +38,7 @@ type GenerateBlockResp struct {
 }
 
 // GenerateBlock RPC method.
-// Mine a block with a set of ordered transactions immediately to a specified address or descriptor (before the RPC call returns)
+// Mine a set of ordered transactions to a specified address or descriptor and return the block hash.
 func (bc *BitcoindClient) GenerateBlock(ctx context.Context, args GenerateBlockReq) (result GenerateBlockResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "generateblock", args); err != nil {
@@ -49,11 +49,11 @@ func (bc *BitcoindClient) GenerateBlock(ctx context.Context, args GenerateBlockR
 }
 
 // GenerateToAddressReq holds the arguments for the GenerateToAddress call.
-//  1. nblocks     (numeric, required) How many blocks are generated immediately.
+//  1. nblocks     (numeric, required) How many blocks are generated.
 //  2. address     (string, required) The address to send the newly generated bitcoin to.
 //  3. maxtries    (numeric, optional, default=1000000) How many iterations to try.
 type GenerateToAddressReq struct {
-	// How many blocks are generated immediately.
+	// How many blocks are generated.
 	NBlocks float64 `json:"nblocks"`
 
 	// The address to send the newly generated bitcoin to.
@@ -92,7 +92,7 @@ func (alts *GenerateToAddressResp) UnmarshalJSON(b []byte) error {
 }
 
 // GenerateToAddress RPC method.
-// Mine blocks immediately to a specified address (before the RPC call returns)
+// Mine to a specified address and return the block hashes.
 func (bc *BitcoindClient) GenerateToAddress(ctx context.Context, args GenerateToAddressReq) (result GenerateToAddressResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "generatetoaddress", args); err != nil {
@@ -103,11 +103,11 @@ func (bc *BitcoindClient) GenerateToAddress(ctx context.Context, args GenerateTo
 }
 
 // GenerateToDescriptorReq holds the arguments for the GenerateToDescriptor call.
-//  1. num_blocks    (numeric, required) How many blocks are generated immediately.
+//  1. num_blocks    (numeric, required) How many blocks are generated.
 //  2. descriptor    (string, required) The descriptor to send the newly generated bitcoin to.
 //  3. maxtries      (numeric, optional, default=1000000) How many iterations to try.
 type GenerateToDescriptorReq struct {
-	// How many blocks are generated immediately.
+	// How many blocks are generated.
 	NumBlocks float64 `json:"num_blocks"`
 
 	// The descriptor to send the newly generated bitcoin to.
@@ -146,7 +146,7 @@ func (alts *GenerateToDescriptorResp) UnmarshalJSON(b []byte) error {
 }
 
 // GenerateToDescriptor RPC method.
-// Mine blocks immediately to a specified descriptor (before the RPC call returns)
+// Mine to a specified descriptor and return the block hashes.
 func (bc *BitcoindClient) GenerateToDescriptor(ctx context.Context, args GenerateToDescriptorReq) (result GenerateToDescriptorResp, err error) {
 	var resultRaw json.RawMessage
 	if resultRaw, err = bc.sendRequest(ctx, "generatetodescriptor", args); err != nil {
