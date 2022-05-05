@@ -17,7 +17,7 @@ All RPC methods are code-generated from the bitcoind help output.
 
 ## libzmq
 
-`libzmq` must be installed in order to compile, because it is needed by [this import](github.com/pebbe/zmq4) that handles ZMQ.
+libzmq must be installed in order to compile, because it is needed by [this import](https://github.com/pebbe/zmq4) that handles ZMQ.
 See the instructions for your OS on the [ZMQ website](https://zeromq.org/download/).
 
 ## bitcoind
@@ -44,7 +44,7 @@ if err != nil {
 }
 ```
 
-See [Config](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#Config) for options.
+See [`Config`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#Config) for options.
 
 ### Ready: Check Connection
 
@@ -59,7 +59,7 @@ for {
 }
 ```
 
-There are also options that can be given to `Ready` to tell it to check the version or ZMQ messages received, see [ReadyOption](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#ReadyOption).
+There are also options that can be given to `Ready` to tell it to check the version or ZMQ messages received, see [`ReadyOption`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#ReadyOption).
 
 ### Call RPC Methods
 
@@ -94,7 +94,7 @@ if err != nil {
 }
 ```
 
-There are [SubscribeHashTx](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SubscribeHashTx), [SubscribeHashBlock](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SubscribeHashBlock), [SubscribeRawTx](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SubscribeRawTx), [SubscribeRawBlock](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SubscribeRawBlock), and [SubscribeSequence](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SubscribeSequence).
+There are [`SubscribeHashTx`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindClient.SubscribeHashTx), [`SubscribeHashBlock`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindClient.SubscribeHashBlock), [`SubscribeRawTx`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindClient.SubscribeRawTx), [`SubscribeRawBlock`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindClient.SubscribeRawBlock), and [`SubscribeSequence`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindClient.SubscribeSequence).
 
 ### Receive
 
@@ -108,7 +108,7 @@ case msg, open := <-ch:
 }
 ```
 
-The message types are [HashMsg](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#HashMsg), [RawMsg](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#RawMsg) or [SequenceMsg](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SequenceMsg).
+The message types are [`HashMsg`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#HashMsg), [`RawMsg`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#RawMsg) or [`SequenceMsg`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#SequenceMsg).
 
 ### Cancel
 
@@ -120,7 +120,7 @@ This closes the channel and releases resources. Closing the client will do that 
 
 # Error Handling
 
-The RPC methods may return errors that are of the type [\*BitcoindError](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindError), that means the connection was successful but bitcoind had something to complain about related to the user input.
+The RPC methods may return errors that are of the type [`*BitcoindError`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#BitcoindError), that means the connection was successful but bitcoind had something to complain about related to the user input.
 
 ```go
 var bErr *bitcoindclient.BitcoindError
@@ -132,7 +132,7 @@ if errors.As(err, &bErr) {
 
 Other expected errors are `*url.Error` if the connection failed, or `context.Canceled`/`context.DeadlineExceeded` if the context was cancelled/expired.
 
-If running against a different version of bitcoind you might get an error of type [\*UnmarshalError](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UnmarshalError) because the response format was not as expected. If you get this when running against the matching version then please report an issue.
+If running against a different version of bitcoind you might get an error of type [`*UnmarshalError`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UnmarshalError) because the response format was not as expected. If you get this when running against the matching version then please report an issue.
 
 # Call Options
 
@@ -142,7 +142,7 @@ If running against a different version of bitcoind you might get an error of typ
 ctx = bitcoindclient.UseConnectionRetries(ctx, 2)
 ```
 
-Enable retry on connection error by modifying the context with [UseConnectionRetries](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UseConnectionRetries).
+Enable retry on connection error by modifying the context with [`UseConnectionRetries`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UseConnectionRetries).
 
 ### URI Path
 
@@ -150,4 +150,4 @@ Enable retry on connection error by modifying the context with [UseConnectionRet
 ctx = bitcoindclient.UseUriPath(ctx, "/wallet/mywallet")
 ```
 
-Change the URI path for a call by modifying the context with [UseUriPath](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UseUriPath).
+Change the URI path for a call by modifying the context with [`UseUriPath`](https://pkg.go.dev/github.com/joakimofv/go-bitcoindclient/v23#UseUriPath).
